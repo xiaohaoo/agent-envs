@@ -1,6 +1,7 @@
 package config
 
 import (
+	"agent-envs/internal/fileutil"
 	"bytes"
 	"fmt"
 	"os"
@@ -8,8 +9,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 )
-
-const filePermission = 0644
 
 // Config 全部配置
 type Config struct {
@@ -31,13 +30,13 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := &Config{Profiles: make(map[string]Profile)}
-	if active, ok := raw["active"].(string); ok {
+	if active, ok := raw[KeyActive].(string); ok {
 		cfg.Active = active
 	}
 
 	// 解析每个 section 为 profile
 	for key, val := range raw {
-		if key == "active" {
+		if key == KeyActive {
 			continue
 		}
 		if profile := parseProfile(val); profile != nil {
@@ -86,18 +85,7 @@ func (c *Config) Save(path string) error {
 		buf.WriteString("\n")
 	}
 
-	// 原子写入：先写临时文件，再重命名
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, buf.Bytes(), filePermission); err != nil {
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // 清理临时文件
-		return fmt.Errorf("重命名文件失败: %w", err)
-	}
-
-	return nil
+	return fileutil.AtomicWrite(path, buf.Bytes(), fileutil.ConfigFilePermission)
 }
 
 // SortedNames 返回排序后的 profile 名称列表

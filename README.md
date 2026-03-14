@@ -1,24 +1,26 @@
-# Agent Envs Switcher
+# Agent Envs
 
-一个优雅的 TUI 工具，用于快速切换 Claude Code 和 Codex 的环境配置。
+[中文文档](README.zh-CN.md)
 
-## 功能特性
+An elegant TUI tool for quickly switching between Claude Code and Codex environment configurations.
 
-- 🚀 支持 Claude Code 和 Codex 两种 AI 代理工具
-- 🎨 美观的终端用户界面（基于 Bubble Tea）
-- ⚡ 快速切换不同的 API 配置
-- 🔒 自动管理认证信息
-- 📝 配置文件自动同步
-- 🌍 支持 macOS / Linux / Windows 多平台
+## Features
 
-## 安装
+- 🚀 Support for both Claude Code and Codex AI agent tools
+- 🎨 Beautiful terminal user interface (powered by Bubble Tea)
+- ⚡ Fast switching between different API configurations
+- 🔒 Automatic authentication management
+- 📝 Automatic configuration file synchronization
+- 🌍 Cross-platform support: macOS / Linux / Windows
 
-### 从 GitHub Release 下载
+## Installation
 
-前往 [Releases](https://github.com/你的用户名/agent-envs/releases) 页面下载对应平台的二进制文件：
+### Download from GitHub Releases
 
-| 平台 | 架构 | 文件名 |
-| ---- | ---- | ------ |
+Visit the [Releases](https://github.com/xiaohaoo/agent-envs/releases) page to download the binary for your platform:
+
+| Platform | Architecture | Filename |
+| -------- | ------------ | -------- |
 | macOS (Apple Silicon) | arm64 | `agent-envs-darwin-arm64.tar.gz` |
 | macOS (Intel) | amd64 | `agent-envs-darwin-amd64.tar.gz` |
 | Linux | amd64 | `agent-envs-linux-amd64.tar.gz` |
@@ -27,278 +29,277 @@
 | Windows | arm64 | `agent-envs-windows-arm64.tar.gz` |
 
 ```bash
-# 下载并解压（以 macOS arm64 为例）
+# Download and extract (macOS arm64 example)
 tar -xzf agent-envs-darwin-arm64.tar.gz
 
-# 移动到系统路径
+# Move to system path
 sudo mv agent-envs-darwin-arm64/agent-envs /usr/local/bin/
 ```
 
-### 从源码编译
+### Build from Source
 
 ```bash
-# 克隆仓库
-git clone https://github.com/你的用户名/agent-envs.git
+# Clone the repository
+git clone https://github.com/xiaohaoo/agent-envs.git
 cd agent-envs
 
-# 编译当前平台
+# Build for current platform
 make build
 
-# 或编译全部平台
+# Or build for all platforms
 make release
 
-# 可选：移动到系统路径
+# Optional: Install to system path
 sudo mv agent-envs /usr/local/bin/
 ```
 
-### 依赖
+### Requirements
 
-- Go 1.24 或更高版本
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI 框架
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - 终端样式库
-- [TOML](https://github.com/BurntSushi/toml) - TOML 解析库
+- Go 1.24 or higher
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
+- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - Terminal styling library
+- [TOML](https://github.com/BurntSushi/toml) - TOML parser
 
-## 配置文件
+## Configuration
 
-### Claude Code 配置
+### Claude Code Configuration
 
-配置文件位置：`~/.claude/agent-envs.toml`
+Configuration file location: `~/.claude/agent-envs.toml`
 
 ```toml
-active = "MMKG中转站"
+active = "Primary Provider"
 
-["MMKG中转站"]
+["Primary Provider"]
 ANTHROPIC_AUTH_TOKEN = "sk-xxx..."
-ANTHROPIC_BASE_URL = "https://code.mmkg.cloud"
+ANTHROPIC_BASE_URL = "https://api.example.com"
 
-["MiniMax"]
+["Secondary Provider"]
 ANTHROPIC_AUTH_TOKEN = "sk-xxx..."
-ANTHROPIC_BASE_URL = "https://api.minimaxi.com/anthropic"
+ANTHROPIC_BASE_URL = "https://api.another.com"
 ```
 
-### Codex 配置
+### Codex Configuration
 
-配置文件位置：`~/.codex/agent-envs.toml`
+Configuration file location: `~/.codex/agent-envs.toml`
 
 ```toml
-active = "GMN中转站"
+active = "Primary Provider"
 
-["GMN中转站"]
+["Primary Provider"]
 name = "codex"
-base_url = "https://gmn.chuangzuoli.com"
+base_url = "https://api.example.com"
 wire_api = "responses"
 requires_openai_auth = "true"
 OPENAI_API_KEY = "sk-xxx..."
 model_provider = "codex"
 model = "gpt-5.3-codex"
-model_reasoning_effort = "medium"
 
-["MMKG中转站"]
+["Secondary Provider"]
 name = "codex"
-base_url = "https://code.mmkg.cloud"
+base_url = "https://api.another.com"
 wire_api = "responses"
 requires_openai_auth = "true"
 OPENAI_API_KEY = "sk-xxx..."
 model_provider = "codex"
 model = "gpt-5.3-codex"
-model_reasoning_effort = "medium"
 ```
 
-## 使用方法
+## Usage
 
-### 启动程序
+### Launch the Program
 
 ```bash
 agent-envs
 ```
 
-### 查看版本
+### Check Version
 
 ```bash
 agent-envs --version
 ```
 
-### 键盘操作
+### Keyboard Controls
 
-#### 选择代理类型界面
+#### Agent Type Selection Screen
 
-- `↑/↓` 或 `k/j` - 移动光标
-- `Enter` 或 `空格` - 选择代理类型
-- `Esc` 或 `q` - 退出程序
-- `Ctrl+C` - 退出程序
+- `↑/↓` or `k/j` - Move cursor
+- `Enter` or `Space` - Select agent type
+- `Esc` or `q` - Exit program
+- `Ctrl+C` - Exit program
 
-#### 配置列表界面
+#### Configuration List Screen
 
-- `↑/↓` 或 `k/j` - 移动光标
-- `Enter` 或 `空格` - 切换到选中的配置
-- `Esc` - 返回到选择代理类型界面
-- `q` - 退出程序
-- `Ctrl+C` - 退出程序
+- `↑/↓` or `k/j` - Move cursor
+- `Enter` or `Space` - Switch to selected configuration
+- `Esc` - Return to agent type selection
+- `q` - Exit program
+- `Ctrl+C` - Exit program
 
-## 工作原理
+## How It Works
 
 ### Claude Code
 
-切换配置时，程序会：
-1. 读取 `~/.claude/agent-envs.toml` 中的配置
-2. 将选中的配置写入 `~/.claude/settings.json` 的 `env` 字段
-3. 更新 `active` 字段到配置文件
+When switching configurations, the program:
+1. Reads configuration from `~/.claude/agent-envs.toml`
+2. Writes the selected configuration to the `env` field in `~/.claude/settings.json`
+3. Updates the `active` field in the configuration file
 
 ### Codex
 
-切换配置时，程序会：
-1. 读取 `~/.codex/agent-envs.toml` 中的配置
-2. 将配置信息写入 `~/.codex/config.toml`
-3. 将认证信息写入 `~/.codex/auth.json`（权限 600）
-4. 更新 `active` 字段到配置文件
+When switching configurations, the program:
+1. Reads configuration from `~/.codex/agent-envs.toml`
+2. Writes configuration to `~/.codex/config.toml`
+3. Writes authentication to `~/.codex/auth.json` (with 600 permissions)
+4. Updates the `active` field in the configuration file
 
-## 界面预览
+## UI Preview
 
 ```
-⚡ 选择代理类型
+⚡ Select Agent Type
 
 ▸ Claude Code (Anthropic Claude Code)
   Codex (Codex CLI)
 
-↑/↓ 移动  •  Enter 选择  •  Esc/q 退出
+↑/↓ Move  •  Enter Select  •  Esc/q Exit
 ```
 
 ```
 ⚡ Claude Code Envs
 
-▸ ● MMKG中转站
-    URL: https://code.mmkg.cloud
-    Key: sk-980a0****eb01
+▸ ● Primary Provider
+    URL: https://api.example.com
+    Key: sk-********eb01
     ───────────────────────────────────
-    MiniMax
-    URL: https://api.minimaxi.com/anthropic
-    Key: sk-cp-S****A3K2
+    Secondary Provider
+    URL: https://api.another.com
+    Key: sk-********A3K2
 
-↑/↓ 移动  •  Enter 切换  •  Esc 返回  •  q 退出
+↑/↓ Move  •  Enter Switch  •  Esc Back  •  q Exit
 ```
 
-## 配色方案
+## Color Scheme
 
-使用 One Dark 主题的明亮配色：
-- 主色调：亮蓝 (#61AFEF)
-- 强调色：青色 (#56B6C2)
-- 成功色：绿色 (#98C379)
-- 错误色：红色 (#E06C75)
+Uses bright colors from the One Dark theme:
+- Primary: Bright Blue (#61AFEF)
+- Accent: Cyan (#56B6C2)
+- Success: Green (#98C379)
+- Error: Red (#E06C75)
 
-## 开发
+## Development
 
-### 项目结构
+### Project Structure
 
 ```
 agent-envs/
-├── cmd/agent-envs/main.go          # 程序入口
+├── cmd/agent-envs/main.go          # Program entry point
 ├── internal/
 │   ├── config/
-│   │   ├── errors.go               # 错误定义
-│   │   ├── profile.go              # Profile 类型和方法
-│   │   ├── paths.go                # 路径管理器
-│   │   ├── config.go               # 配置加载/保存
-│   │   └── config_test.go          # 单元测试
+│   │   ├── errors.go               # Error definitions
+│   │   ├── profile.go              # Profile type and methods
+│   │   ├── paths.go                # Path manager
+│   │   ├── keys.go                 # Configuration key constants
+│   │   └── config.go               # Configuration loading/saving
 │   ├── agent/
-│   │   ├── agent.go                # Agent 接口定义
-│   │   ├── claude.go               # Claude Code 实现
-│   │   ├── codex.go                # Codex CLI 实现
-│   │   └── agent_test.go           # 单元测试
+│   │   ├── agent.go                # Agent interface definition
+│   │   ├── claude.go               # Claude Code implementation
+│   │   └── codex.go                # Codex CLI implementation
+│   ├── fileutil/
+│   │   ├── atomic.go               # Atomic file write utilities
+│   │   └── json.go                 # JSON serialization helpers
 │   └── ui/
-│       ├── styles.go               # 样式定义
-│       ├── model.go                # Bubble Tea 模型
-│       ├── view_selector.go        # 代理选择视图
-│       ├── view_profiles.go        # 配置列表视图
-│       └── ui_test.go              # 单元测试
-├── .github/workflows/release.yml   # 自动发布工作流
-├── Makefile                         # 多平台编译
+│       ├── styles.go               # Style definitions
+│       ├── model.go                # Bubble Tea model
+│       ├── view_selector.go        # Agent selection view
+│       └── view_profiles.go        # Configuration list view
+├── .github/workflows/release.yml   # Automated release workflow
+├── Makefile                         # Multi-platform build
 └── README.md
 ```
 
-### 架构设计
+### Architecture
 
-项目采用三层架构，依赖方向为 `config → agent → ui`：
+The project uses a three-layer architecture with dependency direction: `config → agent → ui`
 
-- **config 包** — 最独立的包，负责配置文件的解析、保存和路径管理
-- **agent 包** — 依赖 config，定义 `Agent` 接口并提供 Claude/Codex 实现
-- **ui 包** — 依赖 agent 和 config，实现 Bubble Tea TUI 界面
+- **config package** — Most independent package, handles configuration parsing, saving, and path management
+- **agent package** — Depends on config, defines `Agent` interface and provides Claude/Codex implementations
+- **ui package** — Depends on agent and config, implements Bubble Tea TUI interface
 
-### 常用命令
+### Common Commands
 
 ```bash
-# 编译当前平台
+# Build for current platform
 make build
 
-# 运行测试
+# Run tests
 make test
 
-# 编译全部 6 个平台
+# Build for all 6 platforms
 make release
 
-# 测试 + 编译 + 生成 checksums
+# Test + build + generate checksums
 make all
 
-# 清理构建产物
+# Clean build artifacts
 make clean
 ```
 
-### 发布新版本
+### Release New Version
 
 ```bash
-# 打 tag 并推送，GitHub Actions 自动构建发布
+# Create tag and push, GitHub Actions will automatically build and release
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## 注意事项
+## Notes
 
-1. **终端环境**：本程序是 TUI 应用，需要在真正的终端中运行（不支持 IDE 内置运行器）
-2. **配置文件格式**：确保 TOML 文件格式正确
-3. **权限问题**：Codex 的 `auth.json` 文件权限为 600
-4. **路径问题**：配置文件必须在对应的主目录下
-5. **备份配置**：修改配置前建议备份原有配置文件
+1. **Terminal Environment**: This is a TUI application and must run in a real terminal (IDE built-in runners are not supported)
+2. **Configuration Format**: Ensure TOML file format is correct
+3. **Permissions**: Codex's `auth.json` file has 600 permissions
+4. **Path Requirements**: Configuration files must be in the corresponding home directory
+5. **Backup**: Recommend backing up existing configuration files before modifications
 
-## 故障排除
+## Troubleshooting
 
-### 配置文件不存在
+### Configuration File Not Found
 
 ```bash
-# 创建 Claude Code 配置目录
+# Create Claude Code configuration directory
 mkdir -p ~/.claude
 
-# 创建 Codex 配置目录
+# Create Codex configuration directory
 mkdir -p ~/.codex
 ```
 
-### 权限问题
+### Permission Issues
 
 ```bash
-# 修复 Codex auth.json 权限
+# Fix Codex auth.json permissions
 chmod 600 ~/.codex/auth.json
 ```
 
-### 编译错误
+### Build Errors
 
 ```bash
-# 安装依赖
+# Install dependencies
 go mod tidy
 
-# 重新编译
+# Rebuild
 make build
 ```
 
-### IDE 中运行报错 "open /dev/tty: device not configured"
+### IDE Error: "open /dev/tty: device not configured"
 
-这是正常现象。TUI 程序需要真正的终端环境，请在系统终端或 IDE 的 Terminal 面板中运行。
+This is expected behavior. TUI programs require a real terminal environment. Please run in a system terminal or IDE's Terminal panel.
 
-## 许可证
+## License
 
 MIT License
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
-## 作者
+## Author
 
-Created with ❤️ by Kiro (Claude Opus 4.6)
+[xiaohaoo](https://github.com/xiaohaoo)

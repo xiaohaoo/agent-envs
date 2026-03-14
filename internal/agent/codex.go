@@ -2,13 +2,11 @@ package agent
 
 import (
 	"agent-envs/internal/config"
+	"agent-envs/internal/fileutil"
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"os"
+	"sync"
 )
-
-const authFilePermission = 0600
 
 // Codex 实现 Codex CLI 代理
 type Codex struct {
@@ -36,16 +34,34 @@ func (c *Codex) SaveConfig(cfg *config.Config) error {
 }
 
 // ApplyProfile 将 profile 应用到 Codex 配置文件
-// 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
+// 并行写入 ~/.codex/config.toml 和 ~/.codex/auth.json
 func (c *Codex) ApplyProfile(profile config.Profile) error {
-	// 写入 config.toml
-	if err := c.writeConfigToml(profile); err != nil {
-		return err
-	}
+	var wg sync.WaitGroup
+	errChan := make(chan error, 2)
 
-	// 写入 auth.json
-	if err := c.writeAuthJson(profile); err != nil {
-		return err
+	// 并行写入两个文件
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if err := c.writeConfigToml(profile); err != nil {
+			errChan <- err
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := c.writeAuthJson(profile); err != nil {
+			errChan <- err
+		}
+	}()
+
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误
+	for err := range errChan {
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -56,32 +72,21 @@ func (c *Codex) writeConfigToml(profile config.Profile) error {
 	path := c.pm.CodexSettings()
 
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("model_provider = %q\n", profile["model_provider"]))
-	buf.WriteString(fmt.Sprintf("model = %q\n", profile["model"]))
-	if effort, ok := profile["model_reasoning_effort"]; ok {
+	buf.WriteString(fmt.Sprintf("model_provider = %q\n", profile[config.KeyModelProvider]))
+	buf.WriteString(fmt.Sprintf("model = %q\n", profile[config.KeyModel]))
+	if effort, ok := profile[config.KeyModelReasoningEffort]; ok {
 		buf.WriteString(fmt.Sprintf("model_reasoning_effort = %q\n", effort))
 	}
 	buf.WriteString("\n")
-	buf.WriteString(fmt.Sprintf("[model_providers.%s]\n", profile["name"]))
-	buf.WriteString(fmt.Sprintf("name = %q\n", profile["name"]))
-	buf.WriteString(fmt.Sprintf("base_url = %q\n", profile["base_url"]))
-	buf.WriteString(fmt.Sprintf("wire_api = %q\n", profile["wire_api"]))
-	if auth, ok := profile["requires_openai_auth"]; ok {
+	buf.WriteString(fmt.Sprintf("[model_providers.%s]\n", profile[config.KeyName]))
+	buf.WriteString(fmt.Sprintf("name = %q\n", profile[config.KeyName]))
+	buf.WriteString(fmt.Sprintf("base_url = %q\n", profile[config.KeyBaseURL]))
+	buf.WriteString(fmt.Sprintf("wire_api = %q\n", profile[config.KeyWireAPI]))
+	if auth, ok := profile[config.KeyRequiresOpenAIAuth]; ok {
 		buf.WriteString(fmt.Sprintf("requires_openai_auth = %s\n", auth))
 	}
 
-	// 原子写入
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, buf.Bytes(), filePermission); err != nil {
-		return fmt.Errorf("写入 config.toml 临时文件失败: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("重命名 config.toml 失败: %w", err)
-	}
-
-	return nil
+	return fileutil.AtomicWrite(path, buf.Bytes(), fileutil.ConfigFilePermission)
 }
 
 // writeAuthJson 写入 ~/.codex/auth.json
@@ -89,25 +94,13 @@ func (c *Codex) writeAuthJson(profile config.Profile) error {
 	path := c.pm.CodexAuth()
 
 	auth := map[string]string{
-		"OPENAI_API_KEY": profile["OPENAI_API_KEY"],
+		config.KeyOpenAIAPIKey: profile[config.KeyOpenAIAPIKey],
 	}
 
-	authData, err := json.MarshalIndent(auth, "", "  ")
+	authData, err := fileutil.MarshalJSONWithNewline(auth)
 	if err != nil {
-		return fmt.Errorf("序列化 auth.json 失败: %w", err)
-	}
-	authData = append(authData, '\n')
-
-	// 原子写入
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, authData, authFilePermission); err != nil {
-		return fmt.Errorf("写入 auth.json 临时文件失败: %w", err)
+		return err
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("重命名 auth.json 失败: %w", err)
-	}
-
-	return nil
+	return fileutil.AtomicWrite(path, authData, fileutil.AuthFilePermission)
 }

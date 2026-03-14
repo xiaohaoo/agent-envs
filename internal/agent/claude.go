@@ -2,12 +2,11 @@ package agent
 
 import (
 	"agent-envs/internal/config"
+	"agent-envs/internal/fileutil"
 	"encoding/json"
 	"fmt"
 	"os"
 )
-
-const filePermission = 0644
 
 // Claude 实现 Claude Code 代理
 type Claude struct {
@@ -53,25 +52,13 @@ func (c *Claude) ApplyProfile(profile config.Profile) error {
 	for k, v := range profile {
 		env[k] = v
 	}
-	settings["env"] = env
+	settings[config.KeyEnv] = env
 
 	// 写回，保持缩进格式
-	out, err := json.MarshalIndent(settings, "", "  ")
+	out, err := fileutil.MarshalJSONWithNewline(settings)
 	if err != nil {
-		return fmt.Errorf("序列化失败: %w", err)
-	}
-	out = append(out, '\n')
-
-	// 原子写入
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, out, filePermission); err != nil {
-		return fmt.Errorf("写入临时文件失败: %w", err)
+		return err
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("重命名文件失败: %w", err)
-	}
-
-	return nil
+	return fileutil.AtomicWrite(path, out, fileutil.ConfigFilePermission)
 }
