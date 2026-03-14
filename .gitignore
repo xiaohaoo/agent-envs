@@ -9,6 +9,3 @@
 
 # OS
 .DS_Store
-
-# 配置文件（可能含敏感信息）
-claude.toml
