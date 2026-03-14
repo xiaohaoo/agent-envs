@@ -7,7 +7,7 @@ import (
 )
 
 // RenderProfiles 渲染配置列表视图
-func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor int, message string, msgIsErr bool) string {
+func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor int, message string, msgIsErr bool, width int) string {
 	var b strings.Builder
 
 	// 标题
@@ -58,9 +58,14 @@ func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor
 			LabelStyle.Render("Key:"),
 			TokenStyle.Render(token)))
 
-		// 分隔线
+		// 分隔线 - 根据终端宽度动态生成
 		if i < len(names)-1 {
-			b.WriteString(DividerStyle.Render("    ───────────────────────────────────"))
+			dividerWidth := width - 4 // 减去缩进的 4 个空格
+			if dividerWidth < 10 {
+				dividerWidth = 35 // 最小宽度
+			}
+			divider := strings.Repeat("─", dividerWidth)
+			b.WriteString(DividerStyle.Render(indent + divider))
 			b.WriteString("\n")
 		}
 	}

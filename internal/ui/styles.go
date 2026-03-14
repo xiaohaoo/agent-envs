@@ -74,5 +74,5 @@ var (
 
 	// DividerStyle 分隔线
 	DividerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#3E4451")) // 更浅的灰色
+			Foreground(lipgloss.Color("#9CA3AF")) // 更浅的灰色
 )
