@@ -1,0 +1,14 @@
+# 二进制文件（仅匹配根目录的二进制）
+/agent-envs
+/agent-envs.exe
+/dist/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# 配置文件（可能含敏感信息）
+claude.toml
