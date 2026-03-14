@@ -19,6 +19,7 @@ type Model struct {
 	msgIsErr  bool                // 消息是否为错误
 	quitting  bool                // 是否退出
 	selecting bool                // 是否在选择代理类型阶段
+	width     int                 // 终端宽度
 }
 
 // NewModel 创建新的 UI 模型
@@ -38,6 +39,9 @@ func (m Model) Init() tea.Cmd {
 // Update 处理消息更新
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -147,7 +151,7 @@ func (m Model) View() string {
 		return RenderSelector(m.cursor)
 	}
 
-	return RenderProfiles(m.agent.Name(), m.cfg, m.names, m.cursor, m.message, m.msgIsErr)
+	return RenderProfiles(m.agent.Name(), m.cfg, m.names, m.cursor, m.message, m.msgIsErr, m.width)
 }
 
 // doSwitch 执行切换配置的操作
