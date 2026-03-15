@@ -19,6 +19,15 @@ DIST_DIR := dist
 GO := go
 GOFLAGS := -trimpath
 
+# 根据操作系统选择安装路径
+ifeq ($(OS),Windows_NT)
+	INSTALL_DIR := $(LOCALAPPDATA)\Programs\$(APP_NAME)
+	BINARY := $(APP_NAME).exe
+else
+	INSTALL_DIR := /usr/local/bin
+	BINARY := $(APP_NAME)
+endif
+
 .PHONY: help build run install clean test vet fmt lint release checksums all
 
 # 默认目标：显示帮助
@@ -27,7 +36,7 @@ help:
 	@echo ""
 	@echo "  make build      - 编译当前平台"
 	@echo "  make run        - 编译并运行"
-	@echo "  make install    - 安装到 /usr/local/bin"
+	@echo "  make install    - 安装到系统路径 (Unix: /usr/local/bin, Windows: %%LOCALAPPDATA%%\Programs)"
 	@echo "  make test       - 运行测试"
 	@echo "  make vet        - 运行 go vet"
 	@echo "  make fmt        - 格式化代码"
@@ -37,23 +46,33 @@ help:
 	@echo "  make all        - 测试 + 编译 + 校验和"
 	@echo "  make clean      - 清理构建产物"
 	@echo ""
+	@echo "Windows 用户也可使用: powershell -ExecutionPolicy Bypass -File install.ps1"
+	@echo ""
 
 # 编译当前平台
 build:
 	@echo "🔨 编译 $(APP_NAME) ($(VERSION))..."
-	@$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(APP_NAME) $(CMD_PATH)
-	@echo "✅ 编译完成: ./$(APP_NAME)"
+	@$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY) $(CMD_PATH)
+	@echo "✅ 编译完成: ./$(BINARY)"
 
 # 编译并运行
 run: build
 	@echo "🚀 运行 $(APP_NAME)..."
-	@./$(APP_NAME)
+	@./$(BINARY)
 
 # 安装到系统路径
 install: build
-	@echo "📦 安装到 /usr/local/bin/$(APP_NAME)..."
-	@sudo mv $(APP_NAME) /usr/local/bin/
+ifeq ($(OS),Windows_NT)
+	@echo "📦 安装到 $(INSTALL_DIR)..."
+	@if not exist "$(INSTALL_DIR)" mkdir "$(INSTALL_DIR)"
+	@copy /Y $(BINARY) "$(INSTALL_DIR)\$(BINARY)"
 	@echo "✅ 安装完成"
+	@echo "⚠️  请确保 $(INSTALL_DIR) 已添加到 PATH 环境变量"
+else
+	@echo "📦 安装到 $(INSTALL_DIR)/$(APP_NAME)..."
+	@sudo mv $(BINARY) $(INSTALL_DIR)/
+	@echo "✅ 安装完成"
+endif
 
 # 运行测试
 test:
@@ -87,7 +106,13 @@ lint:
 # 清理构建产物
 clean:
 	@echo "🧹 清理构建产物..."
-	@rm -rf $(DIST_DIR) $(APP_NAME) $(APP_NAME).exe coverage.out
+ifeq ($(OS),Windows_NT)
+	@if exist $(DIST_DIR) rmdir /S /Q $(DIST_DIR)
+	@if exist $(BINARY) del /Q $(BINARY)
+	@if exist coverage.out del /Q coverage.out
+else
+	@rm -rf $(DIST_DIR) $(BINARY) coverage.out
+endif
 	@echo "✅ 清理完成"
 
 # 多平台编译
@@ -95,14 +120,14 @@ release: clean vet
 	@echo "🚀 开始多平台编译..."
 	@mkdir -p $(DIST_DIR)
 	@$(foreach platform,$(PLATFORMS), \
-		$(eval OS := $(word 1,$(subst /, ,$(platform)))) \
+		$(eval GOOS_VAL := $(word 1,$(subst /, ,$(platform)))) \
 		$(eval ARCH := $(word 2,$(subst /, ,$(platform)))) \
-		$(eval OUTPUT := $(APP_NAME)$(if $(filter windows,$(OS)),.exe,)) \
-		echo "🔨 编译 $(OS)/$(ARCH)..."; \
-		GOOS=$(OS) GOARCH=$(ARCH) $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" \
-			-o $(DIST_DIR)/$(APP_NAME)-$(OS)-$(ARCH)/$(OUTPUT) $(CMD_PATH) || exit 1; \
-		cd $(DIST_DIR) && tar -czf $(APP_NAME)-$(OS)-$(ARCH).tar.gz $(APP_NAME)-$(OS)-$(ARCH)/ && cd ..; \
-		echo "  ✅ $(DIST_DIR)/$(APP_NAME)-$(OS)-$(ARCH).tar.gz"; \
+		$(eval OUTPUT := $(APP_NAME)$(if $(filter windows,$(GOOS_VAL)),.exe,)) \
+		echo "🔨 编译 $(GOOS_VAL)/$(ARCH)..."; \
+		GOOS=$(GOOS_VAL) GOARCH=$(ARCH) $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" \
+			-o $(DIST_DIR)/$(APP_NAME)-$(GOOS_VAL)-$(ARCH)/$(OUTPUT) $(CMD_PATH) || exit 1; \
+		cd $(DIST_DIR) && tar -czf $(APP_NAME)-$(GOOS_VAL)-$(ARCH).tar.gz $(APP_NAME)-$(GOOS_VAL)-$(ARCH)/ && cd ..; \
+		echo "  ✅ $(DIST_DIR)/$(APP_NAME)-$(GOOS_VAL)-$(ARCH).tar.gz"; \
 	)
 	@echo ""
 	@echo "🎉 全部编译完成！"
