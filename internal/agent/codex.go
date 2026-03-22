@@ -4,8 +4,12 @@ import (
 	"agent-envs/internal/config"
 	"agent-envs/internal/fileutil"
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
+
+	"github.com/BurntSushi/toml"
 )
 
 // Codex 实现 Codex CLI 代理
@@ -68,36 +72,56 @@ func (c *Codex) ApplyProfile(profile config.Profile) error {
 }
 
 // writeConfigToml 写入 ~/.codex/config.toml
+// 保留已有的配置字段，只覆盖 profile 中定义的 key
 func (c *Codex) writeConfigToml(profile config.Profile) error {
 	path := c.pm.CodexSettings()
 
-	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("model_provider = %q\n", profile[config.KeyModelProvider]))
-	buf.WriteString(fmt.Sprintf("model = %q\n", profile[config.KeyModel]))
-	if effort, ok := profile[config.KeyModelReasoningEffort]; ok {
-		buf.WriteString(fmt.Sprintf("model_reasoning_effort = %q\n", effort))
+	// 读取已有配置
+	existing := make(map[string]interface{})
+	if data, err := os.ReadFile(path); err == nil {
+		_ = toml.Unmarshal(data, &existing)
 	}
-	buf.WriteString("\n")
-	buf.WriteString(fmt.Sprintf("[model_providers.%s]\n", profile[config.KeyName]))
-	buf.WriteString(fmt.Sprintf("name = %q\n", profile[config.KeyName]))
-	buf.WriteString(fmt.Sprintf("base_url = %q\n", profile[config.KeyBaseURL]))
-	buf.WriteString(fmt.Sprintf("wire_api = %q\n", profile[config.KeyWireAPI]))
+
+	// 顶层字段由用户自行控制，只合并 model_providers 子表
+	providers, _ := existing["model_providers"].(map[string]interface{})
+	if providers == nil {
+		providers = make(map[string]interface{})
+	}
+	providers[profile[config.KeyName]] = map[string]interface{}{
+		"name":     profile[config.KeyName],
+		"base_url": profile[config.KeyBaseURL],
+		"wire_api": profile[config.KeyWireAPI],
+	}
 	if auth, ok := profile[config.KeyRequiresOpenAIAuth]; ok {
-		buf.WriteString(fmt.Sprintf("requires_openai_auth = %s\n", auth))
+		providerMap := providers[profile[config.KeyName]].(map[string]interface{})
+		providerMap["requires_openai_auth"] = auth == "true"
+	}
+	existing["model_providers"] = providers
+
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	if err := enc.Encode(existing); err != nil {
+		return fmt.Errorf("编码 TOML 失败: %w", err)
 	}
 
 	return fileutil.AtomicWrite(path, buf.Bytes(), fileutil.ConfigFilePermission)
 }
 
 // writeAuthJson 写入 ~/.codex/auth.json
+// 保留已有的认证字段，只覆盖 profile 中定义的 key
 func (c *Codex) writeAuthJson(profile config.Profile) error {
 	path := c.pm.CodexAuth()
 
-	auth := map[string]string{
-		config.KeyOpenAIAPIKey: profile[config.KeyOpenAIAPIKey],
+	// 读取已有认证配置
+	existing := make(map[string]interface{})
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &existing)
 	}
 
-	authData, err := fileutil.MarshalJSONWithNewline(auth)
+	// 只覆盖 OPENAI_API_KEY
+	existing[config.KeyOpenAIAPIKey] = profile[config.KeyOpenAIAPIKey]
+
+	authData, err := fileutil.MarshalJSONWithNewline(existing)
 	if err != nil {
 		return err
 	}
