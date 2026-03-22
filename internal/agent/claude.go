@@ -47,8 +47,11 @@ func (c *Claude) ApplyProfile(profile config.Profile) error {
 		return fmt.Errorf("解析 %s 失败: %w", path, err)
 	}
 
-	// 替换 env 字段
-	env := make(map[string]interface{})
+	// 合并 env 字段：保留已有的环境变量，只覆盖 profile 中定义的 key
+	env, _ := settings[config.KeyEnv].(map[string]interface{})
+	if env == nil {
+		env = make(map[string]interface{})
+	}
 	for k, v := range profile {
 		env[k] = v
 	}
