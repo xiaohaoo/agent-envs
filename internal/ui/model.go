@@ -70,25 +70,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "up", "k":
 			if m.selecting {
-				// 在选择代理类型阶段，只有两个选项
-				if m.cursor > 0 {
-					m.cursor--
-				}
+				// 在选择代理类型阶段，循环切换两个选项
+				m.cursor = (m.cursor + 1) % 2
 			} else {
 				if m.cursor > 0 {
 					m.cursor--
+				} else {
+					m.cursor = len(m.names) - 1
 				}
 			}
 
 		case "down", "j":
 			if m.selecting {
-				// 在选择代理类型阶段，只有两个选项
-				if m.cursor < 1 {
-					m.cursor++
-				}
+				// 在选择代理类型阶段，循环切换两个选项
+				m.cursor = (m.cursor + 1) % 2
 			} else {
 				if m.cursor < len(m.names)-1 {
 					m.cursor++
+				} else {
+					m.cursor = 0
 				}
 			}
 
