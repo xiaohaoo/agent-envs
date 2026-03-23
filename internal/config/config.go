@@ -73,19 +73,19 @@ func parseProfile(val interface{}) Profile {
 // Save 保存配置到指定路径
 func (c *Config) Save(path string) error {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "active = %q\n\n", c.Active)
+	fmt.Fprintf(&buf, "active = %q\n", c.Active)
 
 	// 按名称排序输出
 	for _, name := range c.SortedNames() {
 		profile := c.Profiles[name]
+		buf.WriteString("\n")
 		fmt.Fprintf(&buf, "[%q]\n", name)
 		for _, key := range profile.SortedKeys() {
 			fmt.Fprintf(&buf, "%s = %q\n", key, profile[key])
 		}
-		buf.WriteString("\n")
 	}
 
-	return fileutil.AtomicWrite(path, buf.Bytes(), fileutil.ConfigFilePermission)
+	return fileutil.AtomicWrite(path, fileutil.EnsureSingleTrailingNewline(buf.Bytes()), fileutil.ConfigFilePermission)
 }
 
 // SortedNames 返回排序后的 profile 名称列表
