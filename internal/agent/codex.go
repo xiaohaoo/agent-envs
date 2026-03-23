@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"agent-envs/internal/config"
-	"agent-envs/internal/fileutil"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -10,6 +8,9 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
+
+	"agent-envs/internal/config"
+	"agent-envs/internal/fileutil"
 )
 
 // Codex 实现 Codex CLI 代理
@@ -79,7 +80,9 @@ func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 	// 读取已有配置
 	existing := make(map[string]interface{})
 	if data, err := os.ReadFile(path); err == nil {
-		_ = toml.Unmarshal(data, &existing)
+		if err := toml.Unmarshal(data, &existing); err != nil {
+			return fmt.Errorf("解析已有配置失败: %w", err)
+		}
 	}
 
 	// 更新 model_providers 子表（用 profile name 作为 key）
@@ -124,8 +127,7 @@ func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 		}
 	}
 
-	data := append(bytes.TrimRight(buf.Bytes(), "\n"), '\n')
-	return fileutil.AtomicWrite(path, data, fileutil.ConfigFilePermission)
+	return fileutil.AtomicWrite(path, fileutil.EnsureSingleTrailingNewline(buf.Bytes()), fileutil.ConfigFilePermission)
 }
 
 // writeAuthJson 写入 ~/.codex/auth.json
@@ -136,7 +138,9 @@ func (c *Codex) writeAuthJson(profile config.Profile) error {
 	// 读取已有认证配置
 	existing := make(map[string]interface{})
 	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &existing)
+		if err := json.Unmarshal(data, &existing); err != nil {
+			return fmt.Errorf("解析已有认证配置失败: %w", err)
+		}
 	}
 
 	// 只覆盖 OPENAI_API_KEY
