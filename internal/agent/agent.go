@@ -27,7 +27,7 @@ type Agent interface {
 	SaveConfig(cfg *config.Config) error
 
 	// ApplyProfile 将 profile 应用到代理的设置文件
-	ApplyProfile(profile config.Profile) error
+	ApplyProfile(name string, profile config.Profile) error
 }
 
 // New 创建指定类型的代理实例

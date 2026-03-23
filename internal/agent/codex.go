@@ -39,7 +39,7 @@ func (c *Codex) SaveConfig(cfg *config.Config) error {
 
 // ApplyProfile 将 profile 应用到 Codex 配置文件
 // 并行写入 ~/.codex/config.toml 和 ~/.codex/auth.json
-func (c *Codex) ApplyProfile(profile config.Profile) error {
+func (c *Codex) ApplyProfile(name string, profile config.Profile) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 
@@ -47,7 +47,7 @@ func (c *Codex) ApplyProfile(profile config.Profile) error {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if err := c.writeConfigToml(profile); err != nil {
+		if err := c.writeConfigToml(name, profile); err != nil {
 			errChan <- err
 		}
 	}()
@@ -72,8 +72,8 @@ func (c *Codex) ApplyProfile(profile config.Profile) error {
 }
 
 // writeConfigToml 写入 ~/.codex/config.toml
-// 保留已有的配置字段，只覆盖 profile 中定义的 key
-func (c *Codex) writeConfigToml(profile config.Profile) error {
+// 保留已有的配置字段，只覆盖 model_provider 和 model_providers 子表
+func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 	path := c.pm.CodexSettings()
 
 	// 读取已有配置
@@ -82,26 +82,47 @@ func (c *Codex) writeConfigToml(profile config.Profile) error {
 		_ = toml.Unmarshal(data, &existing)
 	}
 
-	// 顶层字段由用户自行控制，只合并 model_providers 子表
+	// 更新 model_providers 子表（用 profile name 作为 key）
 	providers, _ := existing["model_providers"].(map[string]interface{})
 	if providers == nil {
 		providers = make(map[string]interface{})
 	}
-	providers[profile[config.KeyName]] = map[string]interface{}{
-		"name":     profile[config.KeyName],
+	providerEntry := map[string]interface{}{
 		"base_url": profile[config.KeyBaseURL],
+		"name":     name,
 		"wire_api": profile[config.KeyWireAPI],
 	}
 	if auth, ok := profile[config.KeyRequiresOpenAIAuth]; ok {
-		providerMap := providers[profile[config.KeyName]].(map[string]interface{})
-		providerMap["requires_openai_auth"] = auth == "true"
+		providerEntry["requires_openai_auth"] = auth == "true"
 	}
-	existing["model_providers"] = providers
+	providers[name] = providerEntry
 
+	// 设置顶层 model_provider
+	existing[config.KeyModelProvider] = name
+
+	// 将 model_providers 从顶层 map 中摘出，单独序列化
+	// 避免 toml encoder 输出多余的 [model_providers] 父表头
+	delete(existing, "model_providers")
+
+	// 编码顶层字段
 	var buf bytes.Buffer
 	enc := toml.NewEncoder(&buf)
 	if err := enc.Encode(existing); err != nil {
 		return fmt.Errorf("编码 TOML 失败: %w", err)
+	}
+
+	// 逐个追加 [model_providers."xxx"] 子表，各节之间用空行分隔
+	for pName, pVal := range providers {
+		pMap, _ := pVal.(map[string]interface{})
+		if pMap == nil {
+			continue
+		}
+		buf.WriteString(fmt.Sprintf("[model_providers.%q]\n", pName))
+		pEnc := toml.NewEncoder(&buf)
+		if err := pEnc.Encode(pMap); err != nil {
+			return fmt.Errorf("编码 model_providers.%s 失败: %w", pName, err)
+		}
+		buf.WriteString("\n")
 	}
 
 	return fileutil.AtomicWrite(path, buf.Bytes(), fileutil.ConfigFilePermission)
