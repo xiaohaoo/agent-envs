@@ -1,6 +1,7 @@
 package fileutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -12,4 +13,9 @@ func MarshalJSONWithNewline(v interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("序列化失败: %w", err)
 	}
 	return append(data, '\n'), nil
+}
+
+// EnsureSingleTrailingNewline 确保字节切片以且仅以一个换行符结尾
+func EnsureSingleTrailingNewline(b []byte) []byte {
+	return append(bytes.TrimRight(b, "\n"), '\n')
 }

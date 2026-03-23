@@ -117,15 +117,15 @@ func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 		if pMap == nil {
 			continue
 		}
-		buf.WriteString(fmt.Sprintf("[model_providers.%q]\n", pName))
+		buf.WriteString(fmt.Sprintf("\n[model_providers.%q]\n", pName))
 		pEnc := toml.NewEncoder(&buf)
 		if err := pEnc.Encode(pMap); err != nil {
 			return fmt.Errorf("编码 model_providers.%s 失败: %w", pName, err)
 		}
-		buf.WriteString("\n")
 	}
 
-	return fileutil.AtomicWrite(path, buf.Bytes(), fileutil.ConfigFilePermission)
+	data := append(bytes.TrimRight(buf.Bytes(), "\n"), '\n')
+	return fileutil.AtomicWrite(path, data, fileutil.ConfigFilePermission)
 }
 
 // writeAuthJson 写入 ~/.codex/auth.json
