@@ -34,7 +34,7 @@ func (c *Claude) SaveConfig(cfg *config.Config) error {
 }
 
 // ApplyProfile 将 profile 应用到 ~/.claude/settings.json 的 env 字段
-func (c *Claude) ApplyProfile(profile config.Profile) error {
+func (c *Claude) ApplyProfile(name string, profile config.Profile) error {
 	path := c.pm.ClaudeSettings()
 
 	data, err := os.ReadFile(path)

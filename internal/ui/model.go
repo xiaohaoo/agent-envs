@@ -171,7 +171,7 @@ func (m *Model) doSwitch() {
 	}
 
 	profile := m.cfg.Profiles[name]
-	if err := m.agent.ApplyProfile(profile); err != nil {
+	if err := m.agent.ApplyProfile(name, profile); err != nil {
 		m.message = fmt.Sprintf("写入设置失败: %v", err)
 		m.msgIsErr = true
 		return
