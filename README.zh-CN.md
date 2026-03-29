@@ -1,21 +1,23 @@
 # Agent Envs
 
-一个优雅的 TUI 工具，用于快速切换 Claude Code 和 Codex 的环境配置。
+[English](README.md)
+
+`agent-envs` 是一个用于切换 Claude Code 和 Codex CLI 配置档的终端界面工具。你可以把常用服务商配置集中写在 TOML 文件里，通过交互式界面选择目标配置，然后让程序把对应值写入各自原生配置文件。
 
 ## 功能特性
 
-- 🚀 支持 Claude Code 和 Codex 两种 AI 代理工具
-- 🎨 美观的终端用户界面（基于 Bubble Tea）
-- ⚡ 快速切换不同的 API 配置
-- 🔒 自动管理认证信息
-- 📝 配置文件自动同步
-- 🌍 支持 macOS / Linux / Windows 多平台
+- 同时支持 Claude Code 和 Codex CLI
+- 基于 Bubble Tea 的终端交互界面，切换速度快
+- 应用配置时保留原有无关设置，不会粗暴覆盖整个文件
+- 把多个服务商配置集中管理，减少手动改配置的成本
+- 支持 macOS、Linux、Windows
+- 内置 `--version` 版本输出
 
 ## 安装
 
-### 从 GitHub Release 下载
+### 从 GitHub Releases 下载
 
-前往 [Releases](https://github.com/xiaohaoo/agent-envs/releases) 页面下载对应平台的二进制文件：
+前往 [Releases](https://github.com/xiaohaoo/agent-envs/releases) 页面，下载适合你平台的压缩包：
 
 | 平台 | 架构 | 文件名 |
 | ---- | ---- | ------ |
@@ -27,78 +29,116 @@
 | Windows | arm64 | `agent-envs-windows-arm64.tar.gz` |
 
 ```bash
-# 下载并解压（以 macOS arm64 为例）
+# 下载后解压（以 macOS arm64 为例）
 tar -xzf agent-envs-darwin-arm64.tar.gz
 
-# 移动到系统路径
+# 移动到 PATH
 sudo mv agent-envs-darwin-arm64/agent-envs /usr/local/bin/
 ```
 
 ### 从源码编译
 
 ```bash
-# 克隆仓库
 git clone https://github.com/xiaohaoo/agent-envs.git
 cd agent-envs
 
 # 编译当前平台
 make build
 
-# 或编译全部平台
-make release
-
-# 可选：移动到系统路径
-sudo mv agent-envs /usr/local/bin/
+# 可选：确认版本输出
+./agent-envs --version
 ```
 
-### 依赖
+### 安装本地编译结果
+
+```bash
+make install
+```
+
+### 构建要求
 
 - Go 1.24 或更高版本
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI 框架
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - 终端样式库
-- [TOML](https://github.com/BurntSushi/toml) - TOML 解析库
 
-## 配置文件
+## 快速开始
 
-### Claude Code 配置
+1. 创建一个或两个配置文件：
+   - `~/.claude/agent-envs.toml`
+   - `~/.codex/agent-envs.toml`
+2. 运行 `agent-envs`
+3. 选择 `Claude Code` 或 `Codex`
+4. 选中想要启用的配置档
 
-配置文件位置：`~/.claude/agent-envs.toml`
+## 配置说明
+
+### Claude Code
+
+配置文件：`~/.claude/agent-envs.toml`
 
 ```toml
-active = "服务提供商A"
+active = "主服务商"
 
-["服务提供商A"]
-ANTHROPIC_AUTH_TOKEN = "sk-xxx..."
+["主服务商"]
+ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 ANTHROPIC_BASE_URL = "https://api.example.com"
 
-["服务提供商B"]
-ANTHROPIC_AUTH_TOKEN = "sk-xxx..."
-ANTHROPIC_BASE_URL = "https://api.another.com"
+["备用服务商"]
+ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
+ANTHROPIC_BASE_URL = "https://api.backup.example.com"
 ```
 
-### Codex 配置
+切换 Claude Code 配置时，`agent-envs` 会把所选配置合并到 `~/.claude/settings.json` 的 `env` 字段，并保留其中原有的其他环境变量。
 
-配置文件位置：`~/.codex/agent-envs.toml`
+`~/.claude/settings.json` 需要事先存在。如果这台机器上还没运行过 Claude Code，可以先手动创建一个最小文件：
+
+```json
+{
+  "env": {}
+}
+```
+
+Claude 配置档会被当作原始环境变量处理：
+
+- 选中配置中的每个键都会合并进 `~/.claude/settings.json` 的 `env`
+- 新配置里没有声明的已有 `env` 键不会被删除
+- `agent-envs` 不会替你创建 `~/.claude/settings.json` 或 `~/.claude` 目录
+
+### Codex CLI
+
+配置文件：`~/.codex/agent-envs.toml`
 
 ```toml
-active = "服务提供商A"
+active = "主服务商"
 
-["服务提供商A"]
+["主服务商"]
 base_url = "https://api.example.com"
 wire_api = "responses"
-requires_openai_auth = "true"
-OPENAI_API_KEY = "sk-xxx..."
-model_provider = "codex"
-model = "gpt-5.3-codex"
+requires_openai_auth = true
+OPENAI_API_KEY = "sk-..."
 
-["服务提供商B"]
-base_url = "https://api.another.com"
+["备用服务商"]
+base_url = "https://api.backup.example.com"
 wire_api = "responses"
-requires_openai_auth = "true"
-OPENAI_API_KEY = "sk-xxx..."
-model_provider = "codex"
-model = "gpt-5.3-codex"
+requires_openai_auth = true
+OPENAI_API_KEY = "sk-..."
 ```
+
+`agent-envs` 当前会应用这些 Codex 配置键：
+
+- `base_url` -> `[model_providers."<配置名>"].base_url`
+- `wire_api` -> `[model_providers."<配置名>"].wire_api`
+- `requires_openai_auth` -> `[model_providers."<配置名>"].requires_openai_auth`
+- `OPENAI_API_KEY` -> `~/.codex/auth.json`
+
+provider 的 `name` 字段会始终由配置档名称自动写入。`~/.codex/agent-envs.toml` 里额外存在的键会保留在这个文件中，但不会被写进 Codex 原生配置文件。
+
+切换 Codex 配置时，所选配置档名称会成为当前 `model_provider`。此外，`agent-envs` 还会：
+
+- 保留 `~/.codex/config.toml` 中无关的顶层设置
+- 保留 `model_providers` 下其他 provider 的配置
+- 用上面这些受支持字段重写当前选中的 `[model_providers."<配置名>"]`
+- 仅在当前配置档提供了 `OPENAI_API_KEY` 时，才更新 `~/.codex/auth.json` 中的该字段
+
+如果 `~/.codex` 目录已经存在，那么 `config.toml` 和 `auth.json` 可以在第一次成功切换时自动创建。
 
 ## 使用方法
 
@@ -116,41 +156,44 @@ agent-envs --version
 
 ### 键盘操作
 
-#### 选择代理类型界面
+#### 代理选择界面
 
-- `↑/↓` 或 `k/j` - 移动光标
-- `Enter` 或 `空格` - 选择代理类型
-- `Esc` 或 `q` - 退出程序
-- `Ctrl+C` - 退出程序
+- `↑/↓` 或 `k/j`：移动
+- `Enter` 或 `Space`：选择
+- `Esc`、`q` 或 `Ctrl+C`：退出
 
 #### 配置列表界面
 
-- `↑/↓` 或 `k/j` - 移动光标
-- `Enter` 或 `空格` - 切换到选中的配置
-- `Esc` - 返回到选择代理类型界面
-- `q` - 退出程序
-- `Ctrl+C` - 退出程序
+- `↑/↓` 或 `k/j`：移动
+- `Enter` 或 `Space`：切换到当前选中的配置
+- `Esc`：返回代理选择界面
+- `q` 或 `Ctrl+C`：退出
 
-## 工作原理
+## 切换时会改哪些文件
 
 ### Claude Code
 
-切换配置时，程序会：
-1. 读取 `~/.claude/agent-envs.toml` 中的配置
-2. 将选中的配置写入 `~/.claude/settings.json` 的 `env` 字段
-3. 更新 `active` 字段到配置文件
+1. 读取 `~/.claude/agent-envs.toml`
+2. 将所选配置合并到 `~/.claude/settings.json` 的 `env` 字段
+3. 新配置未声明的已有 `env` 键保持不变
+4. 更新 `~/.claude/agent-envs.toml` 中的 `active`
 
-### Codex
+### Codex CLI
 
-切换配置时，程序会：
-1. 读取 `~/.codex/agent-envs.toml` 中的配置
-2. 将配置信息写入 `~/.codex/config.toml`
-3. 将认证信息写入 `~/.codex/auth.json`（权限 600）
-4. 更新 `active` 字段到配置文件
+1. 读取 `~/.codex/agent-envs.toml`
+2. 更新 `~/.codex/config.toml` 顶层的 `model_provider`
+3. 用 `name`、`base_url`、`wire_api` 以及可选的 `requires_openai_auth` 替换或创建当前选中的 `[model_providers."<配置名>"]`
+4. 保留其他无关的 Codex 顶层设置和 provider 配置
+5. 仅在当前配置档包含 `OPENAI_API_KEY` 时，才将其合并写入 `~/.codex/auth.json`
+6. 保留 `~/.codex/auth.json` 中其他已有认证字段
+7. 以 `0600` 权限写入 `~/.codex/auth.json`
+8. 更新 `~/.codex/agent-envs.toml` 中的 `active`
 
 ## 界面预览
 
-```
+当前界面文案为简体中文：
+
+```text
 ⚡ 选择代理类型
 
 ▸ Claude Code (Anthropic Claude Code)
@@ -159,65 +202,59 @@ agent-envs --version
 ↑/↓ 移动  •  Enter 选择  •  Esc/q 退出
 ```
 
-```
+```text
 ⚡ Claude Code Envs
 
-▸ ● 服务提供商A
+▸ ● 主服务商
     URL: https://api.example.com
-    Key: sk-********eb01
+    Key: sk-ant-****abcd
     ───────────────────────────────────
-    服务提供商B
-    URL: https://api.another.com
-    Key: sk-********A3K2
+    备用服务商
+    URL: https://api.backup.example.com
+    Key: sk-ant-****wxyz
 
 ↑/↓ 移动  •  Enter 切换  •  Esc 返回  •  q 退出
 ```
-
-## 配色方案
-
-使用 One Dark 主题的明亮配色：
-- 主色调：亮蓝 (#61AFEF)
-- 强调色：青色 (#56B6C2)
-- 成功色：绿色 (#98C379)
-- 错误色：红色 (#E06C75)
 
 ## 开发
 
 ### 项目结构
 
-```
+```text
 agent-envs/
 ├── cmd/agent-envs/main.go          # 程序入口
 ├── internal/
-│   ├── config/
-│   │   ├── errors.go               # 错误定义
-│   │   ├── profile.go              # Profile 类型和方法
-│   │   ├── paths.go                # 路径管理器
-│   │   ├── config.go               # 配置加载/保存
-│   │   └── config_test.go          # 单元测试
 │   ├── agent/
-│   │   ├── agent.go                # Agent 接口定义
+│   │   ├── agent.go                # Agent 接口与工厂
 │   │   ├── claude.go               # Claude Code 实现
-│   │   ├── codex.go                # Codex CLI 实现
-│   │   └── agent_test.go           # 单元测试
+│   │   └── codex.go                # Codex CLI 实现
+│   ├── config/
+│   │   ├── config.go               # 配置加载与保存
+│   │   ├── errors.go               # 配置相关错误
+│   │   ├── keys.go                 # 共用配置键
+│   │   ├── paths.go                # 路径管理
+│   │   └── profile.go              # Profile 辅助方法
+│   ├── fileutil/
+│   │   ├── atomic.go               # 原子写文件
+│   │   └── json.go                 # JSON 辅助方法
 │   └── ui/
-│       ├── styles.go               # 样式定义
-│       ├── model.go                # Bubble Tea 模型
-│       ├── view_selector.go        # 代理选择视图
-│       ├── view_profiles.go        # 配置列表视图
-│       └── ui_test.go              # 单元测试
-├── .github/workflows/release.yml   # 自动发布工作流
-├── Makefile                         # 多平台编译
-└── README.md
+│       ├── model.go                # Bubble Tea 更新与视图流程
+│       ├── styles.go               # UI 样式
+│       ├── view_profiles.go        # 配置列表渲染
+│       └── view_selector.go        # 代理选择渲染
+├── .github/workflows/release.yml   # 发布工作流
+├── Makefile
+├── README.md
+└── README.zh-CN.md
 ```
 
 ### 架构设计
 
-项目采用三层架构，依赖方向为 `config → agent → ui`：
+项目采用三层依赖结构：`config -> agent -> ui`
 
-- **config 包** — 最独立的包，负责配置文件的解析、保存和路径管理
-- **agent 包** — 依赖 config，定义 `Agent` 接口并提供 Claude/Codex 实现
-- **ui 包** — 依赖 agent 和 config，实现 Bubble Tea TUI 界面
+- `config` 负责解析、序列化和路径处理
+- `agent` 负责把配置应用到 Claude Code 和 Codex
+- `ui` 负责终端界面渲染和交互
 
 ### 常用命令
 
@@ -225,13 +262,28 @@ agent-envs/
 # 编译当前平台
 make build
 
+# 本地编译并运行
+make run
+
+# 安装编译结果
+make install
+
 # 运行测试
 make test
 
-# 编译全部 6 个平台
+# 运行 go vet
+make vet
+
+# 格式化代码
+make fmt
+
+# 运行 golangci-lint（若已安装）
+make lint
+
+# 构建所有支持平台的发布包
 make release
 
-# 测试 + 编译 + 生成 checksums
+# 测试 + 发布包 + checksums
 make all
 
 # 清理构建产物
@@ -241,51 +293,58 @@ make clean
 ### 发布新版本
 
 ```bash
-# 打 tag 并推送，GitHub Actions 自动构建发布
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## 注意事项
-
-1. **终端环境**：本程序是 TUI 应用，需要在真正的终端中运行（不支持 IDE 内置运行器）
-2. **配置文件格式**：确保 TOML 文件格式正确
-3. **权限问题**：Codex 的 `auth.json` 文件权限为 600
-4. **路径问题**：配置文件必须在对应的主目录下
-5. **备份配置**：修改配置前建议备份原有配置文件
+推送 `v*` 标签后会自动触发 GitHub Actions 发布流程。
 
 ## 故障排除
 
-### 配置文件不存在
+### 找不到配置文件
+
+先创建配置目录：
 
 ```bash
-# 创建 Claude Code 配置目录
-mkdir -p ~/.claude
+mkdir -p ~/.claude ~/.codex
+```
 
-# 创建 Codex 配置目录
-mkdir -p ~/.codex
+然后按上面的示例创建对应的配置文件。
+
+### `active` 指向了不存在的配置档
+
+请确认 `active = "..."` 指向的名称和 `agent-envs.toml` 里的某个 section 完全一致。如果 `active` 对应的配置档不存在，程序会拒绝加载。
+
+### Claude Code 的 `settings.json` 不存在
+
+切换 Claude 配置前，请先创建 `~/.claude/settings.json`：
+
+```json
+{
+  "env": {}
+}
 ```
 
 ### 权限问题
 
+`~/.codex/auth.json` 会以 `0600` 权限写入。如果需要手动修复：
+
 ```bash
-# 修复 Codex auth.json 权限
 chmod 600 ~/.codex/auth.json
 ```
+
+`~/.codex/config.toml` 和 `~/.codex/auth.json` 可以在第一次切换时自动创建，但前提是上层 `~/.codex` 目录已经存在。
 
 ### 编译错误
 
 ```bash
-# 安装依赖
 go mod tidy
-
-# 重新编译
 make build
 ```
 
-### IDE 中运行报错 "open /dev/tty: device not configured"
+### IDE 中出现 `open /dev/tty: device not configured`
 
-这是正常现象。TUI 程序需要真正的终端环境，请在系统终端或 IDE 的 Terminal 面板中运行。
+这是 TUI 程序在非终端运行器中启动时的正常现象。请在系统终端或 IDE 的 Terminal 面板中运行 `agent-envs`。
 
 ## 许可证
 
@@ -293,7 +352,7 @@ MIT License
 
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request！
+欢迎提交 Issue 和 Pull Request。
 
 ## 作者
 

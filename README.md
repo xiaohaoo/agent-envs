@@ -1,23 +1,23 @@
 # Agent Envs
 
-[中文文档](README.zh-CN.md)
+[简体中文](README.zh-CN.md)
 
-An elegant TUI tool for quickly switching between Claude Code and Codex environment configurations.
+`agent-envs` is a terminal UI for switching Claude Code and Codex CLI profiles. It stores reusable profile definitions in TOML files, lets you pick one interactively, and writes the selected values into each tool's native configuration files.
 
 ## Features
 
-- 🚀 Support for both Claude Code and Codex AI agent tools
-- 🎨 Beautiful terminal user interface (powered by Bubble Tea)
-- ⚡ Fast switching between different API configurations
-- 🔒 Automatic authentication management
-- 📝 Automatic configuration file synchronization
-- 🌍 Cross-platform support: macOS / Linux / Windows
+- Support both Claude Code and Codex CLI
+- Fast profile switching from a Bubble Tea based TUI
+- Preserve unrelated settings in existing config files when applying a profile
+- Keep multiple providers in one place instead of editing config files by hand
+- Cross-platform support for macOS, Linux, and Windows
+- Built-in version output with `--version`
 
 ## Installation
 
 ### Download from GitHub Releases
 
-Visit the [Releases](https://github.com/xiaohaoo/agent-envs/releases) page to download the binary for your platform:
+Download the archive for your platform from the [Releases](https://github.com/xiaohaoo/agent-envs/releases) page:
 
 | Platform | Architecture | Filename |
 | -------- | ------------ | -------- |
@@ -29,80 +29,116 @@ Visit the [Releases](https://github.com/xiaohaoo/agent-envs/releases) page to do
 | Windows | arm64 | `agent-envs-windows-arm64.tar.gz` |
 
 ```bash
-# Download and extract (macOS arm64 example)
+# Extract the archive (macOS arm64 example)
 tar -xzf agent-envs-darwin-arm64.tar.gz
 
-# Move to system path
+# Move the binary into your PATH
 sudo mv agent-envs-darwin-arm64/agent-envs /usr/local/bin/
 ```
 
 ### Build from Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/xiaohaoo/agent-envs.git
 cd agent-envs
 
-# Build for current platform
+# Build the current platform binary
 make build
 
-# Or build for all platforms
-make release
-
-# Optional: Install to system path
-sudo mv agent-envs /usr/local/bin/
+# Optional: verify the build
+./agent-envs --version
 ```
 
-### Requirements
+### Install the Local Build
 
-- Go 1.24 or higher
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - Terminal styling library
-- [TOML](https://github.com/BurntSushi/toml) - TOML parser
+```bash
+make install
+```
+
+### Build Requirements
+
+- Go 1.24 or later
+
+## Quick Start
+
+1. Create one or both profile files:
+   - `~/.claude/agent-envs.toml`
+   - `~/.codex/agent-envs.toml`
+2. Run `agent-envs`
+3. Choose `Claude Code` or `Codex`
+4. Select the profile you want to activate
 
 ## Configuration
 
-### Claude Code Configuration
+### Claude Code
 
-Configuration file location: `~/.claude/agent-envs.toml`
+Profile file: `~/.claude/agent-envs.toml`
 
 ```toml
 active = "Primary Provider"
 
 ["Primary Provider"]
-ANTHROPIC_AUTH_TOKEN = "sk-xxx..."
+ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 ANTHROPIC_BASE_URL = "https://api.example.com"
 
-["Secondary Provider"]
-ANTHROPIC_AUTH_TOKEN = "sk-xxx..."
-ANTHROPIC_BASE_URL = "https://api.another.com"
+["Backup Provider"]
+ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
+ANTHROPIC_BASE_URL = "https://api.backup.example.com"
 ```
 
-### Codex Configuration
+`agent-envs` merges the selected profile into the `env` field of `~/.claude/settings.json` and preserves unrelated existing environment variables.
 
-Configuration file location: `~/.codex/agent-envs.toml`
+`~/.claude/settings.json` must already exist. If Claude Code has never been launched on the machine, create the file first:
+
+```json
+{
+  "env": {}
+}
+```
+
+Claude profiles are treated as raw environment variables:
+
+- Every key in the selected profile is merged into `~/.claude/settings.json`
+- Existing `env` keys that are not present in the selected profile are left untouched
+- `agent-envs` does not create `~/.claude/settings.json` or the `~/.claude` directory for you
+
+### Codex CLI
+
+Profile file: `~/.codex/agent-envs.toml`
 
 ```toml
 active = "Primary Provider"
 
 ["Primary Provider"]
-name = "codex"
 base_url = "https://api.example.com"
 wire_api = "responses"
-requires_openai_auth = "true"
-OPENAI_API_KEY = "sk-xxx..."
-model_provider = "codex"
-model = "gpt-5.3-codex"
+requires_openai_auth = true
+OPENAI_API_KEY = "sk-..."
 
-["Secondary Provider"]
-name = "codex"
-base_url = "https://api.another.com"
+["Backup Provider"]
+base_url = "https://api.backup.example.com"
 wire_api = "responses"
-requires_openai_auth = "true"
-OPENAI_API_KEY = "sk-xxx..."
-model_provider = "codex"
-model = "gpt-5.3-codex"
+requires_openai_auth = true
+OPENAI_API_KEY = "sk-..."
 ```
+
+`agent-envs` currently applies these Codex profile keys:
+
+- `base_url` -> `[model_providers."<profile name>"].base_url`
+- `wire_api` -> `[model_providers."<profile name>"].wire_api`
+- `requires_openai_auth` -> `[model_providers."<profile name>"].requires_openai_auth`
+- `OPENAI_API_KEY` -> `~/.codex/auth.json`
+
+The provider `name` field is always written from the profile name. Extra keys in `~/.codex/agent-envs.toml` stay in that file, but are not written into native Codex config files.
+
+When switching Codex profiles, the profile name becomes the active `model_provider`. `agent-envs` also:
+
+- Preserves unrelated top-level settings in `~/.codex/config.toml`
+- Preserves other provider entries under `model_providers`
+- Rewrites the selected `[model_providers."<profile name>"]` table with the managed fields above
+- Updates `OPENAI_API_KEY` in `~/.codex/auth.json` only when the selected profile provides one
+
+If the `~/.codex` directory already exists, `config.toml` and `auth.json` can be created on the first successful switch.
 
 ## Usage
 
@@ -112,7 +148,7 @@ model = "gpt-5.3-codex"
 agent-envs
 ```
 
-### Check Version
+### Show Version
 
 ```bash
 agent-envs --version
@@ -120,177 +156,195 @@ agent-envs --version
 
 ### Keyboard Controls
 
-#### Agent Type Selection Screen
+#### Agent Selection Screen
 
-- `↑/↓` or `k/j` - Move cursor
-- `Enter` or `Space` - Select agent type
-- `Esc` or `q` - Exit program
-- `Ctrl+C` - Exit program
+- `↑/↓` or `k/j` to move
+- `Enter` or `Space` to select
+- `Esc`, `q`, or `Ctrl+C` to quit
 
-#### Configuration List Screen
+#### Profile List Screen
 
-- `↑/↓` or `k/j` - Move cursor
-- `Enter` or `Space` - Switch to selected configuration
-- `Esc` - Return to agent type selection
-- `q` - Exit program
-- `Ctrl+C` - Exit program
+- `↑/↓` or `k/j` to move
+- `Enter` or `Space` to switch to the selected profile
+- `Esc` to return to agent selection
+- `q` or `Ctrl+C` to quit
 
-## How It Works
+## What Changes on Switch
 
 ### Claude Code
 
-When switching configurations, the program:
-1. Reads configuration from `~/.claude/agent-envs.toml`
-2. Writes the selected configuration to the `env` field in `~/.claude/settings.json`
-3. Updates the `active` field in the configuration file
+1. Read `~/.claude/agent-envs.toml`
+2. Merge the selected profile into the `env` field of `~/.claude/settings.json`
+3. Leave existing `env` keys in place if the new profile does not define them
+4. Update `active` in `~/.claude/agent-envs.toml`
 
-### Codex
+### Codex CLI
 
-When switching configurations, the program:
-1. Reads configuration from `~/.codex/agent-envs.toml`
-2. Writes configuration to `~/.codex/config.toml`
-3. Writes authentication to `~/.codex/auth.json` (with 600 permissions)
-4. Updates the `active` field in the configuration file
+1. Read `~/.codex/agent-envs.toml`
+2. Update top-level `model_provider` in `~/.codex/config.toml`
+3. Replace or create the selected `[model_providers."<profile name>"]` table using `name`, `base_url`, `wire_api`, and optional `requires_openai_auth`
+4. Preserve unrelated top-level Codex settings and other provider tables
+5. Merge `OPENAI_API_KEY` into `~/.codex/auth.json` only when the selected profile contains it
+6. Preserve other existing auth fields in `~/.codex/auth.json`
+7. Write `~/.codex/auth.json` with `0600` permissions
+8. Update `active` in `~/.codex/agent-envs.toml`
 
 ## UI Preview
 
-```
-⚡ Select Agent Type
+The current UI text is Simplified Chinese:
+
+```text
+⚡ 选择代理类型
 
 ▸ Claude Code (Anthropic Claude Code)
   Codex (Codex CLI)
 
-↑/↓ Move  •  Enter Select  •  Esc/q Exit
+↑/↓ 移动  •  Enter 选择  •  Esc/q 退出
 ```
 
-```
+```text
 ⚡ Claude Code Envs
 
 ▸ ● Primary Provider
     URL: https://api.example.com
-    Key: sk-********eb01
+    Key: sk-ant-****abcd
     ───────────────────────────────────
-    Secondary Provider
-    URL: https://api.another.com
-    Key: sk-********A3K2
+    Backup Provider
+    URL: https://api.backup.example.com
+    Key: sk-ant-****wxyz
 
-↑/↓ Move  •  Enter Switch  •  Esc Back  •  q Exit
+↑/↓ 移动  •  Enter 切换  •  Esc 返回  •  q 退出
 ```
-
-## Color Scheme
-
-Uses bright colors from the One Dark theme:
-- Primary: Bright Blue (#61AFEF)
-- Accent: Cyan (#56B6C2)
-- Success: Green (#98C379)
-- Error: Red (#E06C75)
 
 ## Development
 
 ### Project Structure
 
-```
+```text
 agent-envs/
 ├── cmd/agent-envs/main.go          # Program entry point
 ├── internal/
-│   ├── config/
-│   │   ├── errors.go               # Error definitions
-│   │   ├── profile.go              # Profile type and methods
-│   │   ├── paths.go                # Path manager
-│   │   ├── keys.go                 # Configuration key constants
-│   │   └── config.go               # Configuration loading/saving
 │   ├── agent/
-│   │   ├── agent.go                # Agent interface definition
+│   │   ├── agent.go                # Agent interface and factory
 │   │   ├── claude.go               # Claude Code implementation
 │   │   └── codex.go                # Codex CLI implementation
+│   ├── config/
+│   │   ├── config.go               # Config loading and saving
+│   │   ├── errors.go               # Config-related errors
+│   │   ├── keys.go                 # Shared config keys
+│   │   ├── paths.go                # Path manager
+│   │   └── profile.go              # Profile helpers
 │   ├── fileutil/
-│   │   ├── atomic.go               # Atomic file write utilities
-│   │   └── json.go                 # JSON serialization helpers
+│   │   ├── atomic.go               # Atomic file writes
+│   │   └── json.go                 # JSON helpers
 │   └── ui/
-│       ├── styles.go               # Style definitions
-│       ├── model.go                # Bubble Tea model
-│       ├── view_selector.go        # Agent selection view
-│       └── view_profiles.go        # Configuration list view
-├── .github/workflows/release.yml   # Automated release workflow
-├── Makefile                         # Multi-platform build
-└── README.md
+│       ├── model.go                # Bubble Tea update/view flow
+│       ├── styles.go               # UI styles
+│       ├── view_profiles.go        # Profile list rendering
+│       └── view_selector.go        # Agent selector rendering
+├── .github/workflows/release.yml   # Release workflow
+├── Makefile
+├── README.md
+└── README.zh-CN.md
 ```
 
 ### Architecture
 
-The project uses a three-layer architecture with dependency direction: `config → agent → ui`
+The project follows a three-layer dependency flow: `config -> agent -> ui`
 
-- **config package** — Most independent package, handles configuration parsing, saving, and path management
-- **agent package** — Depends on config, defines `Agent` interface and provides Claude/Codex implementations
-- **ui package** — Depends on agent and config, implements Bubble Tea TUI interface
+- `config` handles parsing, serialization, and file paths
+- `agent` applies profile changes for Claude Code and Codex
+- `ui` renders the terminal interface and handles interaction
 
 ### Common Commands
 
 ```bash
-# Build for current platform
+# Build for the current platform
 make build
+
+# Build and run locally
+make run
+
+# Install the built binary
+make install
 
 # Run tests
 make test
 
-# Build for all 6 platforms
+# Run go vet
+make vet
+
+# Format code
+make fmt
+
+# Run golangci-lint if installed
+make lint
+
+# Build archives for all supported platforms
 make release
 
-# Test + build + generate checksums
+# Test + release + checksums
 make all
 
 # Clean build artifacts
 make clean
 ```
 
-### Release New Version
+### Release a New Version
 
 ```bash
-# Create tag and push, GitHub Actions will automatically build and release
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## Notes
-
-1. **Terminal Environment**: This is a TUI application and must run in a real terminal (IDE built-in runners are not supported)
-2. **Configuration Format**: Ensure TOML file format is correct
-3. **Permissions**: Codex's `auth.json` file has 600 permissions
-4. **Path Requirements**: Configuration files must be in the corresponding home directory
-5. **Backup**: Recommend backing up existing configuration files before modifications
+Pushing a `v*` tag triggers the GitHub Actions release workflow.
 
 ## Troubleshooting
 
 ### Configuration File Not Found
 
-```bash
-# Create Claude Code configuration directory
-mkdir -p ~/.claude
+Create the required config directories first:
 
-# Create Codex configuration directory
-mkdir -p ~/.codex
+```bash
+mkdir -p ~/.claude ~/.codex
+```
+
+Then create the profile files using the examples above.
+
+### `active` Points to a Missing Profile
+
+Make sure `active = "..."` matches one of the section names in `agent-envs.toml`. The program refuses to load a config when the active profile does not exist.
+
+### Claude Code `settings.json` Is Missing
+
+Create `~/.claude/settings.json` before switching Claude profiles:
+
+```json
+{
+  "env": {}
+}
 ```
 
 ### Permission Issues
 
+`~/.codex/auth.json` is written with `0600` permissions. If you need to fix it manually:
+
 ```bash
-# Fix Codex auth.json permissions
 chmod 600 ~/.codex/auth.json
 ```
+
+`~/.codex/config.toml` and `~/.codex/auth.json` can be created automatically on the first switch, but the parent `~/.codex` directory must already exist.
 
 ### Build Errors
 
 ```bash
-# Install dependencies
 go mod tidy
-
-# Rebuild
 make build
 ```
 
-### IDE Error: "open /dev/tty: device not configured"
+### IDE Error: `open /dev/tty: device not configured`
 
-This is expected behavior. TUI programs require a real terminal environment. Please run in a system terminal or IDE's Terminal panel.
+This is expected for TUI programs started from non-terminal runners. Run `agent-envs` in a real terminal or in your IDE's integrated terminal.
 
 ## License
 
@@ -298,7 +352,7 @@ MIT License
 
 ## Contributing
 
-Issues and Pull Requests are welcome!
+Issues and pull requests are welcome.
 
 ## Author
 
