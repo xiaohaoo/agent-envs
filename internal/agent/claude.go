@@ -58,7 +58,7 @@ func (c *Claude) ApplyProfile(name string, profile config.Profile) error {
 	settings[config.KeyEnv] = env
 
 	// 写回，保持缩进格式
-	out, err := fileutil.MarshalJSONWithNewline(settings)
+	out, err := fileutil.MarshalJSONNoTrailingNewline(settings)
 	if err != nil {
 		return err
 	}

@@ -92,14 +92,14 @@ func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor
 // extractProfileInfo 从 profile 中提取 URL 和 token 信息
 func extractProfileInfo(profile config.Profile) (url, token string) {
 	// 尝试 Claude 格式
-	if val, ok := profile[config.KeyAnthropicBaseURL]; ok {
+	if val, ok := profile.String(config.KeyAnthropicBaseURL); ok {
 		url = val
 		token = profile.MaskToken()
 		return
 	}
 
 	// 尝试 Codex 格式
-	if val, ok := profile[config.KeyBaseURL]; ok {
+	if val, ok := profile.String(config.KeyBaseURL); ok {
 		url = val
 		token = profile.MaskToken()
 		return

@@ -63,9 +63,7 @@ func parseProfile(val interface{}) Profile {
 
 	profile := make(Profile)
 	for k, v := range section {
-		if s, ok := v.(string); ok {
-			profile[k] = s
-		}
+		profile[k] = v
 	}
 	return profile
 }
@@ -81,11 +79,16 @@ func (c *Config) Save(path string) error {
 		buf.WriteString("\n")
 		fmt.Fprintf(&buf, "[%q]\n", name)
 		for _, key := range profile.SortedKeys() {
-			fmt.Fprintf(&buf, "%s = %q\n", key, profile[key])
+			line, err := encodeProfileEntry(key, profile[key])
+			if err != nil {
+				return err
+			}
+			buf.WriteString(line)
+			buf.WriteString("\n")
 		}
 	}
 
-	return fileutil.AtomicWrite(path, fileutil.EnsureSingleTrailingNewline(buf.Bytes()), fileutil.ConfigFilePermission)
+	return fileutil.AtomicWrite(path, bytes.TrimRight(buf.Bytes(), "\n"), fileutil.ConfigFilePermission)
 }
 
 // SortedNames 返回排序后的 profile 名称列表
@@ -96,4 +99,13 @@ func (c *Config) SortedNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func encodeProfileEntry(key string, value any) (string, error) {
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	if err := enc.Encode(map[string]any{key: value}); err != nil {
+		return "", fmt.Errorf("编码 profile 字段 %s 失败: %w", key, err)
+	}
+	return string(bytes.TrimRight(buf.Bytes(), "\n")), nil
 }
