@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -78,8 +82,10 @@ func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 	path := c.pm.CodexSettings()
 
 	// 读取已有配置
+	var original string
 	existing := make(map[string]interface{})
 	if data, err := os.ReadFile(path); err == nil {
+		original = string(data)
 		if err := toml.Unmarshal(data, &existing); err != nil {
 			return fmt.Errorf("解析已有配置失败: %w", err)
 		}
@@ -90,44 +96,28 @@ func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 	if providers == nil {
 		providers = make(map[string]interface{})
 	}
+	baseURL, _ := profile.String(config.KeyBaseURL)
+	wireAPI, _ := profile.String(config.KeyWireAPI)
 	providerEntry := map[string]interface{}{
-		"base_url": profile[config.KeyBaseURL],
+		"base_url": baseURL,
 		"name":     name,
-		"wire_api": profile[config.KeyWireAPI],
+		"wire_api": wireAPI,
 	}
-	if auth, ok := profile[config.KeyRequiresOpenAIAuth]; ok {
-		providerEntry["requires_openai_auth"] = auth == "true"
+	if auth, ok := profile.Bool(config.KeyRequiresOpenAIAuth); ok {
+		providerEntry["requires_openai_auth"] = auth
 	}
 	providers[name] = providerEntry
 
 	// 设置顶层 model_provider
 	existing[config.KeyModelProvider] = name
 
-	// 将 model_providers 从顶层 map 中摘出，单独序列化
-	// 避免 toml encoder 输出多余的 [model_providers] 父表头
-	delete(existing, "model_providers")
-
-	// 编码顶层字段
-	var buf bytes.Buffer
-	enc := toml.NewEncoder(&buf)
-	if err := enc.Encode(existing); err != nil {
-		return fmt.Errorf("编码 TOML 失败: %w", err)
+	body, providerOrder := stripManagedCodexConfig(original, name)
+	rendered, err := renderCodexConfig(body, providers, providerOrder)
+	if err != nil {
+		return err
 	}
 
-	// 逐个追加 [model_providers."xxx"] 子表，各节之间用空行分隔
-	for pName, pVal := range providers {
-		pMap, _ := pVal.(map[string]interface{})
-		if pMap == nil {
-			continue
-		}
-		buf.WriteString(fmt.Sprintf("\n[model_providers.%q]\n", pName))
-		pEnc := toml.NewEncoder(&buf)
-		if err := pEnc.Encode(pMap); err != nil {
-			return fmt.Errorf("编码 model_providers.%s 失败: %w", pName, err)
-		}
-	}
-
-	return fileutil.AtomicWrite(path, fileutil.EnsureSingleTrailingNewline(buf.Bytes()), fileutil.ConfigFilePermission)
+	return fileutil.AtomicWrite(path, bytes.TrimRight([]byte(rendered), "\n"), fileutil.ConfigFilePermission)
 }
 
 // writeAuthJson 写入 ~/.codex/auth.json
@@ -144,12 +134,190 @@ func (c *Codex) writeAuthJson(profile config.Profile) error {
 	}
 
 	// 只覆盖 OPENAI_API_KEY
-	existing[config.KeyOpenAIAPIKey] = profile[config.KeyOpenAIAPIKey]
+	if apiKey, ok := profile[config.KeyOpenAIAPIKey]; ok {
+		existing[config.KeyOpenAIAPIKey] = apiKey
+	}
 
-	authData, err := fileutil.MarshalJSONWithNewline(existing)
+	authData, err := fileutil.MarshalJSONNoTrailingNewline(existing)
 	if err != nil {
 		return err
 	}
 
 	return fileutil.AtomicWrite(path, authData, fileutil.AuthFilePermission)
+}
+
+var codexTableHeaderPattern = regexp.MustCompile(`^\s*\[([^\[\]]+)\]\s*$`)
+
+func stripManagedCodexConfig(original, selectedProvider string) (string, []string) {
+	lines := splitLinesKeepNewline(original)
+	if len(lines) == 0 {
+		return fmt.Sprintf("%s = %q\n", config.KeyModelProvider, selectedProvider), nil
+	}
+
+	var (
+		out                []string
+		providerOrder      []string
+		currentSection     string
+		skippingProviders  bool
+		replacedTopLevelKV bool
+	)
+
+	for _, line := range lines {
+		if header, ok := parseCodexTableHeader(line); ok {
+			currentSection = header
+
+			if providerName, managed := parseModelProvidersHeader(header); managed {
+				skippingProviders = true
+				if providerName != "" {
+					providerOrder = appendUnique(providerOrder, providerName)
+				}
+				continue
+			}
+
+			skippingProviders = false
+			out = append(out, line)
+			continue
+		}
+
+		if skippingProviders {
+			continue
+		}
+
+		if currentSection == "" && isTopLevelKeyAssignment(line, config.KeyModelProvider) {
+			out = append(out, fmt.Sprintf("%s = %q\n", config.KeyModelProvider, selectedProvider))
+			replacedTopLevelKV = true
+			continue
+		}
+
+		out = append(out, line)
+	}
+
+	if !replacedTopLevelKV {
+		out = insertTopLevelKey(out, config.KeyModelProvider, selectedProvider)
+	}
+
+	return strings.TrimRight(strings.Join(out, ""), "\n"), providerOrder
+}
+
+func renderCodexConfig(body string, providers map[string]interface{}, providerOrder []string) (string, error) {
+	var buf bytes.Buffer
+
+	if body != "" {
+		buf.WriteString(body)
+	}
+
+	for _, name := range orderedProviderNames(providers, providerOrder) {
+		pMap, _ := providers[name].(map[string]interface{})
+		if pMap == nil {
+			continue
+		}
+
+		if buf.Len() > 0 && buf.Bytes()[buf.Len()-1] != '\n' {
+			buf.WriteString("\n")
+		}
+
+		buf.WriteString(fmt.Sprintf("[model_providers.%q]\n", name))
+		enc := toml.NewEncoder(&buf)
+		if err := enc.Encode(pMap); err != nil {
+			return "", fmt.Errorf("编码 model_providers.%s 失败: %w", name, err)
+		}
+	}
+
+	return buf.String(), nil
+}
+
+func orderedProviderNames(providers map[string]interface{}, existingOrder []string) []string {
+	seen := make(map[string]struct{}, len(existingOrder))
+	ordered := make([]string, 0, len(providers))
+
+	for _, name := range existingOrder {
+		if _, ok := providers[name]; ok {
+			ordered = append(ordered, name)
+			seen[name] = struct{}{}
+		}
+	}
+
+	remaining := make([]string, 0, len(providers))
+	for name := range providers {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		remaining = append(remaining, name)
+	}
+	sort.Strings(remaining)
+
+	return append(ordered, remaining...)
+}
+
+func splitLinesKeepNewline(text string) []string {
+	if text == "" {
+		return nil
+	}
+	return strings.SplitAfter(text, "\n")
+}
+
+func parseCodexTableHeader(line string) (string, bool) {
+	matches := codexTableHeaderPattern.FindStringSubmatch(line)
+	if len(matches) != 2 {
+		return "", false
+	}
+	return strings.TrimSpace(matches[1]), true
+}
+
+func parseModelProvidersHeader(header string) (string, bool) {
+	if header == "model_providers" {
+		return "", true
+	}
+
+	const prefix = "model_providers."
+	if !strings.HasPrefix(header, prefix) {
+		return "", false
+	}
+
+	name := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	if unquoted, err := strconv.Unquote(name); err == nil {
+		name = unquoted
+	}
+
+	return name, true
+}
+
+func isTopLevelKeyAssignment(line, key string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	return strings.HasPrefix(trimmed, key+" =")
+}
+
+func insertTopLevelKey(lines []string, key, value string) []string {
+	insertLine := fmt.Sprintf("%s = %q\n", key, value)
+	if len(lines) == 0 {
+		return []string{insertLine}
+	}
+
+	firstHeader := len(lines)
+	for i, line := range lines {
+		if _, ok := parseCodexTableHeader(line); ok {
+			firstHeader = i
+			break
+		}
+	}
+
+	insertAt := firstHeader
+	for insertAt > 0 && strings.TrimSpace(lines[insertAt-1]) == "" {
+		insertAt--
+	}
+
+	lines = append(lines[:insertAt], append([]string{insertLine}, lines[insertAt:]...)...)
+	return lines
+}
+
+func appendUnique(values []string, candidate string) []string {
+	for _, value := range values {
+		if value == candidate {
+			return values
+		}
+	}
+	return append(values, candidate)
 }

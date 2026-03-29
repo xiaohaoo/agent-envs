@@ -14,7 +14,7 @@ var agentOptions = []AgentOption{
 }
 
 // RenderSelector 渲染代理选择视图
-func RenderSelector(cursor int) string {
+func RenderSelector(cursor int, message string, msgIsErr bool) string {
 	var b strings.Builder
 
 	b.WriteString(TitleStyle.Render("⚡ 选择代理类型"))
@@ -36,6 +36,16 @@ func RenderSelector(cursor int) string {
 			line = prefix + NormalItemStyle.Render(option.Name) + " " + LabelStyle.Render("("+option.Desc+")")
 		}
 		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	if message != "" {
+		b.WriteString("\n")
+		if msgIsErr {
+			b.WriteString(ErrorStyle.Render("✗ " + message))
+		} else {
+			b.WriteString(SuccessStyle.Render("✓ " + message))
+		}
 		b.WriteString("\n")
 	}
 

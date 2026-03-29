@@ -102,24 +102,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					agentType = agent.TypeCodex
 				}
 
+				m.message = ""
+				m.msgIsErr = false
+
 				// 创建代理实例
 				ag, err := agent.New(agentType, m.pm)
 				if err != nil {
 					m.message = fmt.Sprintf("创建代理失败: %v", err)
 					m.msgIsErr = true
-					m.quitting = true
-					return m, tea.Quit
+					return m, nil
 				}
-				m.agent = ag
 
 				// 加载对应的配置
 				cfg, err := ag.LoadConfig()
 				if err != nil {
 					m.message = fmt.Sprintf("加载配置失败: %v", err)
 					m.msgIsErr = true
-					m.quitting = true
-					return m, tea.Quit
+					return m, nil
 				}
+				m.agent = ag
 				m.cfg = cfg
 				m.names = cfg.SortedNames()
 				m.cursor = 0
@@ -131,6 +132,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						break
 					}
 				}
+				m.message = ""
+				m.msgIsErr = false
 				m.selecting = false
 			} else {
 				m.doSwitch()
@@ -148,7 +151,7 @@ func (m Model) View() string {
 	}
 
 	if m.selecting {
-		return RenderSelector(m.cursor)
+		return RenderSelector(m.cursor, m.message, m.msgIsErr)
 	}
 
 	return RenderProfiles(m.agent.Name(), m.cfg, m.names, m.cursor, m.message, m.msgIsErr, m.width)
