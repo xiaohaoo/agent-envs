@@ -116,6 +116,7 @@ func (c *Codex) writeConfigToml(name string, profile config.Profile) error {
 	if err != nil {
 		return err
 	}
+	rendered = normalizeCodexTableSpacing(rendered)
 
 	return fileutil.AtomicWrite(path, bytes.TrimRight([]byte(rendered), "\n"), fileutil.ConfigFilePermission)
 }
@@ -224,6 +225,28 @@ func renderCodexConfig(body string, providers map[string]interface{}, providerOr
 	}
 
 	return buf.String(), nil
+}
+
+func normalizeCodexTableSpacing(text string) string {
+	lines := splitLinesKeepNewline(text)
+	if len(lines) == 0 {
+		return ""
+	}
+
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if _, ok := parseCodexTableHeader(line); ok {
+			for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+				out = out[:len(out)-1]
+			}
+			if len(out) > 0 {
+				out = append(out, "\n")
+			}
+		}
+		out = append(out, line)
+	}
+
+	return strings.Join(out, "")
 }
 
 func orderedProviderNames(providers map[string]interface{}, existingOrder []string) []string {
