@@ -346,6 +346,81 @@ func TestCleanAddInputRemovesControlChars(t *testing.T) {
 	}
 }
 
+func TestAddProfileRejectsInvalidName(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := Model{
+		agent:     fakeAgent,
+		cfg:       &config.Config{ProfileMap: make(map[string]config.Profile)},
+		selecting: false,
+	}
+
+	model = updateModel(t, model, keyRunes("a"))
+	model = updateModel(t, model, keyRunes("bad[name]"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+
+	if !model.adding {
+		t.Fatal("expected add form to remain active")
+	}
+	if !model.msgIsErr || !strings.Contains(model.message, "不能包含") {
+		t.Fatalf("message = %q, msgIsErr = %v", model.message, model.msgIsErr)
+	}
+	if fakeAgent.savedCfg != nil {
+		t.Fatal("expected config not to be saved")
+	}
+}
+
+func TestAddProfileRejectsInvalidURL(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := Model{
+		agent:     fakeAgent,
+		cfg:       &config.Config{ProfileMap: make(map[string]config.Profile)},
+		selecting: false,
+	}
+
+	model = updateModel(t, model, keyRunes("a"))
+	model = updateModel(t, model, keyRunes("demo"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+	model = updateModel(t, model, keyRunes("ftp://api.example.com"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+
+	if !model.adding {
+		t.Fatal("expected add form to remain active")
+	}
+	if !model.msgIsErr || !strings.Contains(model.message, "http 或 https") {
+		t.Fatalf("message = %q, msgIsErr = %v", model.message, model.msgIsErr)
+	}
+	if fakeAgent.savedCfg != nil {
+		t.Fatal("expected config not to be saved")
+	}
+}
+
+func TestAddProfileRejectsSecretWhitespace(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := Model{
+		agent:     fakeAgent,
+		cfg:       &config.Config{ProfileMap: make(map[string]config.Profile)},
+		selecting: false,
+	}
+
+	model = updateModel(t, model, keyRunes("a"))
+	model = updateModel(t, model, keyRunes("demo"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+	model = updateModel(t, model, keyRunes("https://api.example.com"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+	model = updateModel(t, model, keyRunes("sk test"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+
+	if !model.adding {
+		t.Fatal("expected add form to remain active")
+	}
+	if !model.msgIsErr || !strings.Contains(model.message, "空白字符") {
+		t.Fatalf("message = %q, msgIsErr = %v", model.message, model.msgIsErr)
+	}
+	if fakeAgent.savedCfg != nil {
+		t.Fatal("expected config not to be saved")
+	}
+}
+
 func switchModel(fakeAgent *fakeAgent) Model {
 	return Model{
 		agent: fakeAgent,

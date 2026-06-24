@@ -92,7 +92,7 @@ ANTHROPIC_BASE_URL = "https://api.backup.example.com"
 
 切换 Claude Code 配置时，`agent-envs` 会把所选配置合并到 `~/.claude/settings.json` 的 `env` 字段，并保留其中原有的其他环境变量。
 
-`~/.claude/settings.json` 需要事先存在。如果这台机器上还没运行过 Claude Code，可以先手动创建一个最小文件：
+如果这台机器上还没运行过 Claude Code，`agent-envs` 会在第一次成功切换时自动创建包含最小 `env` 字段的 `~/.claude/settings.json`：
 
 ```json
 {
@@ -104,7 +104,7 @@ Claude 配置档会被当作原始环境变量处理：
 
 - 选中配置中的每个键都会合并进 `~/.claude/settings.json` 的 `env`
 - 新配置里没有声明的已有 `env` 键不会被删除
-- `agent-envs` 不会替你创建 `~/.claude/settings.json` 或 `~/.claude` 目录
+- `agent-envs` 会在需要时自动创建 `~/.claude/settings.json` 和 `~/.claude` 目录
 
 ### Codex CLI
 
@@ -143,7 +143,7 @@ provider 的 `name` 字段会始终由配置档名称自动写入。Codex 配置
 - 用上面这些受支持字段重写当前选中的 `[model_providers."<配置名>"]`
 - 仅在当前配置档提供了 `OPENAI_API_KEY` 时，才更新 `~/.codex/auth.json` 中的该字段
 
-如果 `~/.codex` 目录已经存在，那么 `config.toml` 和 `auth.json` 可以在第一次成功切换时自动创建。
+`~/.codex/config.toml`、`~/.codex/auth.json` 和上层 `~/.codex` 目录都可以在第一次成功切换时自动创建。
 
 ## 使用方法
 
@@ -309,11 +309,7 @@ git push origin v1.0.0
 
 ### 找不到配置文件
 
-先按上面的示例创建统一配置文件，默认路径是 `os.UserConfigDir()/agent-envs/config.toml`。原生工具目录只需要在对应工具写入配置时存在：
-
-```bash
-mkdir -p ~/.claude ~/.codex
-```
+先按上面的示例创建统一配置文件，默认路径是 `os.UserConfigDir()/agent-envs/config.toml`。应用配置时会自动创建所需的原生工具目录。
 
 ### `active` 指向了不存在的配置档
 
@@ -321,7 +317,7 @@ mkdir -p ~/.claude ~/.codex
 
 ### Claude Code 的 `settings.json` 不存在
 
-切换 Claude 配置前，请先创建 `~/.claude/settings.json`：
+如果 `~/.claude/settings.json` 不存在，程序会自动创建如下最小结构：
 
 ```json
 {
@@ -337,7 +333,7 @@ mkdir -p ~/.claude ~/.codex
 chmod 600 ~/.codex/auth.json
 ```
 
-`~/.codex/config.toml` 和 `~/.codex/auth.json` 可以在第一次切换时自动创建，但前提是上层 `~/.codex` 目录已经存在。
+`~/.codex/config.toml`、`~/.codex/auth.json` 和 `~/.codex` 目录都可以在第一次切换时自动创建。
 
 ### 编译错误
 

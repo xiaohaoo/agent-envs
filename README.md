@@ -92,7 +92,7 @@ ANTHROPIC_BASE_URL = "https://api.backup.example.com"
 
 `agent-envs` merges the selected profile into the `env` field of `~/.claude/settings.json` and preserves unrelated existing environment variables.
 
-`~/.claude/settings.json` must already exist. If Claude Code has never been launched on the machine, create the file first:
+If Claude Code has never been launched on the machine, `agent-envs` creates `~/.claude/settings.json` with a minimal `env` object on the first successful switch:
 
 ```json
 {
@@ -104,7 +104,7 @@ Claude profiles are treated as raw environment variables:
 
 - Every key in the selected profile is merged into `~/.claude/settings.json`
 - Existing `env` keys that are not present in the selected profile are left untouched
-- `agent-envs` does not create `~/.claude/settings.json` or the `~/.claude` directory for you
+- `agent-envs` creates `~/.claude/settings.json` and the `~/.claude` directory when needed
 
 ### Codex CLI
 
@@ -143,7 +143,7 @@ When switching Codex profiles, the profile name becomes the active `model_provid
 - Rewrites the selected `[model_providers."<profile name>"]` table with the managed fields above
 - Updates `OPENAI_API_KEY` in `~/.codex/auth.json` only when the selected profile provides one
 
-If the `~/.codex` directory already exists, `config.toml` and `auth.json` can be created on the first successful switch.
+`~/.codex/config.toml`, `~/.codex/auth.json`, and the parent `~/.codex` directory can be created on the first successful switch.
 
 ## Usage
 
@@ -309,11 +309,7 @@ Pushing a `v*` tag triggers the GitHub Actions release workflow.
 
 ### Configuration File Not Found
 
-Create the unified config file using the examples above. Its default path is `os.UserConfigDir()/agent-envs/config.toml`. Create native tool directories only when the target tool needs them:
-
-```bash
-mkdir -p ~/.claude ~/.codex
-```
+Create the unified config file using the examples above. Its default path is `os.UserConfigDir()/agent-envs/config.toml`. Native tool directories are created automatically when a profile is applied.
 
 ### `active` Points to a Missing Profile
 
@@ -321,7 +317,7 @@ Make sure `active = "..."` matches one of the profile names under `[claude.profi
 
 ### Claude Code `settings.json` Is Missing
 
-Create `~/.claude/settings.json` before switching Claude profiles:
+If `~/.claude/settings.json` is missing, it is created automatically with this minimal shape:
 
 ```json
 {
@@ -337,7 +333,7 @@ Create `~/.claude/settings.json` before switching Claude profiles:
 chmod 600 ~/.codex/auth.json
 ```
 
-`~/.codex/config.toml` and `~/.codex/auth.json` can be created automatically on the first switch, but the parent `~/.codex` directory must already exist.
+`~/.codex/config.toml`, `~/.codex/auth.json`, and `~/.codex` can be created automatically on the first switch.
 
 ### Build Errors
 

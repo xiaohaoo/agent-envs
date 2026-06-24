@@ -53,7 +53,10 @@ func (c *Claude) ApplyProfile(name string, profileMap config.Profile) error {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("read %s failed: %w", path, err)
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read %s failed: %w", path, err)
+		}
+		data = []byte(`{"env":{}}`)
 	}
 
 	settingsMap := make(map[string]any)

@@ -46,8 +46,6 @@ help:
 	@echo "  make all        - 测试 + 编译 + 校验和"
 	@echo "  make clean      - 清理构建产物"
 	@echo ""
-	@echo "Windows 用户也可使用: powershell -ExecutionPolicy Bypass -File install.ps1"
-	@echo ""
 
 # 编译当前平台
 build:

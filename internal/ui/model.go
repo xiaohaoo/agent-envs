@@ -5,6 +5,7 @@ import (
 	"agent-envs/internal/config"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"unicode"
 
@@ -312,6 +313,11 @@ func (m *Model) submitAddInput() {
 
 	switch m.formStep {
 	case profileFormStepName:
+		if err := validateProfileName(value); err != nil {
+			m.message = err.Error()
+			m.msgIsErr = true
+			return
+		}
 		if _, exists := m.cfg.ProfileMap[value]; exists && (!m.editing || value != m.editName) {
 			m.message = fmt.Sprintf("配置「%s」已存在", value)
 			m.msgIsErr = true
@@ -322,6 +328,11 @@ func (m *Model) submitAddInput() {
 		field, ok := m.currentProfileField()
 		if !ok {
 			m.message = "表单字段无效"
+			m.msgIsErr = true
+			return
+		}
+		if err := validateProfileField(field, value); err != nil {
+			m.message = err.Error()
 			m.msgIsErr = true
 			return
 		}
@@ -354,6 +365,33 @@ func cleanInputRuneList(inputRuneList []rune) []rune {
 		cleanRuneList = append(cleanRuneList, inputRune)
 	}
 	return cleanRuneList
+}
+
+func validateProfileName(name string) error {
+	if strings.ContainsAny(name, "[]") {
+		return errors.New("配置名称不能包含 [ 或 ]")
+	}
+	return nil
+}
+
+func validateProfileField(field agent.ProfileField, value string) error {
+	key := strings.ToUpper(field.Key)
+	isURLField := strings.Contains(key, "URL") || (!field.Secret && strings.Contains(key, "API") && strings.Contains(strings.ToLower(value), "://"))
+	if isURLField {
+		parsedURL, err := url.ParseRequestURI(value)
+		if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+			return fmt.Errorf("%s 必须是有效 URL", field.Label)
+		}
+		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			return fmt.Errorf("%s 只支持 http 或 https", field.Label)
+		}
+	}
+
+	if field.Secret && strings.ContainsFunc(value, unicode.IsSpace) {
+		return fmt.Errorf("%s 不能包含空白字符", field.Label)
+	}
+
+	return nil
 }
 
 func (m *Model) addInputValue() string {
