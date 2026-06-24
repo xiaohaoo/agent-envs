@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-`agent-envs` is a terminal UI for switching Claude Code and Codex CLI profiles. It stores reusable profile definitions in TOML files, lets you pick one interactively, and writes the selected values into each tool's native configuration files.
+`agent-envs` is a terminal UI for switching Claude Code and Codex CLI profiles. It stores reusable profile definitions in one TOML file, lets you pick one interactively, and writes the selected values into each tool's native configuration files.
 
 ## Features
 
@@ -61,27 +61,31 @@ make install
 
 ## Quick Start
 
-1. Create one or both profile files:
-   - `~/.claude/agent-envs.toml`
-   - `~/.codex/agent-envs.toml`
+1. Create the unified profile file:
+   - Windows: `%AppData%\agent-envs\config.toml`
+   - macOS: `~/Library/Application Support/agent-envs/config.toml`
+   - Linux: `~/.config/agent-envs/config.toml`
 2. Run `agent-envs`
 3. Choose `Claude Code` or `Codex`
 4. Select the profile you want to activate
 
 ## Configuration
 
+All reusable profiles live in `os.UserConfigDir()/agent-envs/config.toml`. Claude and Codex keep independent active profiles inside the same file.
+
 ### Claude Code
 
-Profile file: `~/.claude/agent-envs.toml`
+Profile section: `[claude]` in the unified config file
 
 ```toml
+[claude]
 active = "Primary Provider"
 
-["Primary Provider"]
+[claude.profiles."Primary Provider"]
 ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 ANTHROPIC_BASE_URL = "https://api.example.com"
 
-["Backup Provider"]
+[claude.profiles."Backup Provider"]
 ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 ANTHROPIC_BASE_URL = "https://api.backup.example.com"
 ```
@@ -104,18 +108,19 @@ Claude profiles are treated as raw environment variables:
 
 ### Codex CLI
 
-Profile file: `~/.codex/agent-envs.toml`
+Profile section: `[codex]` in the unified config file
 
 ```toml
+[codex]
 active = "Primary Provider"
 
-["Primary Provider"]
+[codex.profiles."Primary Provider"]
 base_url = "https://api.example.com"
 wire_api = "responses"
 requires_openai_auth = true
 OPENAI_API_KEY = "sk-..."
 
-["Backup Provider"]
+[codex.profiles."Backup Provider"]
 base_url = "https://api.backup.example.com"
 wire_api = "responses"
 requires_openai_auth = true
@@ -129,7 +134,7 @@ OPENAI_API_KEY = "sk-..."
 - `requires_openai_auth` -> `[model_providers."<profile name>"].requires_openai_auth`
 - `OPENAI_API_KEY` -> `~/.codex/auth.json`
 
-The provider `name` field is always written from the profile name. Extra keys in `~/.codex/agent-envs.toml` stay in that file, but are not written into native Codex config files.
+The provider `name` field is always written from the profile name. Extra keys in the Codex profile section stay in the unified config file, but are not written into native Codex config files.
 
 When switching Codex profiles, the profile name becomes the active `model_provider`. `agent-envs` also:
 
@@ -166,28 +171,31 @@ agent-envs --version
 
 - `↑/↓` or `k/j` to move
 - `Enter` or `Space` to switch to the selected profile
+- `a` to add a profile by entering a name, API URL, and token
 - `Esc` to return to agent selection
 - `q` or `Ctrl+C` to quit
+
+When adding a Claude profile, `agent-envs` writes `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN`. When adding a Codex profile, it writes `base_url`, `OPENAI_API_KEY`, `wire_api = "responses"`, and `requires_openai_auth = true`.
 
 ## What Changes on Switch
 
 ### Claude Code
 
-1. Read `~/.claude/agent-envs.toml`
+1. Read `os.UserConfigDir()/agent-envs/config.toml`
 2. Merge the selected profile into the `env` field of `~/.claude/settings.json`
 3. Leave existing `env` keys in place if the new profile does not define them
-4. Update `active` in `~/.claude/agent-envs.toml`
+4. Update `active` in the `[claude]` section of the unified config file
 
 ### Codex CLI
 
-1. Read `~/.codex/agent-envs.toml`
+1. Read `os.UserConfigDir()/agent-envs/config.toml`
 2. Update top-level `model_provider` in `~/.codex/config.toml`
 3. Replace or create the selected `[model_providers."<profile name>"]` table using `name`, `base_url`, `wire_api`, and optional `requires_openai_auth`
 4. Preserve unrelated top-level Codex settings and other provider tables
 5. Merge `OPENAI_API_KEY` into `~/.codex/auth.json` only when the selected profile contains it
 6. Preserve other existing auth fields in `~/.codex/auth.json`
 7. Write `~/.codex/auth.json` with `0600` permissions
-8. Update `active` in `~/.codex/agent-envs.toml`
+8. Update `active` in the `[codex]` section of the unified config file
 
 ## UI Preview
 
@@ -213,7 +221,7 @@ The current UI text is Simplified Chinese:
     URL: https://api.backup.example.com
     Key: sk-ant-****wxyz
 
-↑/↓ 移动  •  Enter 切换  •  Esc 返回  •  q 退出
+↑/↓ 移动  •  Enter 切换  •  a 添加  •  Esc 返回  •  q 退出
 ```
 
 ## Development
@@ -229,11 +237,7 @@ agent-envs/
 │   │   ├── claude.go               # Claude Code implementation
 │   │   └── codex.go                # Codex CLI implementation
 │   ├── config/
-│   │   ├── config.go               # Config loading and saving
-│   │   ├── errors.go               # Config-related errors
-│   │   ├── keys.go                 # Shared config keys
-│   │   ├── paths.go                # Path manager
-│   │   └── profile.go              # Profile helpers
+│   │   └── config.go               # Config loading, paths, keys, and profile helpers
 │   ├── fileutil/
 │   │   ├── atomic.go               # Atomic file writes
 │   │   └── json.go                 # JSON helpers
@@ -303,17 +307,15 @@ Pushing a `v*` tag triggers the GitHub Actions release workflow.
 
 ### Configuration File Not Found
 
-Create the required config directories first:
+Create the unified config file using the examples above. Its default path is `os.UserConfigDir()/agent-envs/config.toml`. Create native tool directories only when the target tool needs them:
 
 ```bash
 mkdir -p ~/.claude ~/.codex
 ```
 
-Then create the profile files using the examples above.
-
 ### `active` Points to a Missing Profile
 
-Make sure `active = "..."` matches one of the section names in `agent-envs.toml`. The program refuses to load a config when the active profile does not exist.
+Make sure `active = "..."` matches one of the profile names under `[claude.profiles]` or `[codex.profiles]`. The program refuses to load a config when the active profile does not exist.
 
 ### Claude Code `settings.json` Is Missing
 

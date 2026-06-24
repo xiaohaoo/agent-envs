@@ -1,26 +1,30 @@
 package ui
 
 import (
+	"agent-envs/internal/agent"
 	"agent-envs/internal/config"
 	"fmt"
 	"strings"
 )
 
 // RenderProfiles 渲染配置列表视图
-func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor int, message string, msgIsErr bool, width int) string {
+func RenderProfiles(ag agent.Agent, cfg *config.Config, nameList []string, cursor int, message string, msgIsErr bool, width int) string {
 	var b strings.Builder
 
-	// 标题
-	b.WriteString(TitleStyle.Render("⚡ " + agentName + " Envs"))
+	b.WriteString(TitleStyle.Render("⚡ " + ag.Name() + " Envs"))
 	b.WriteString("\n")
 
-	// 配置列表
-	for i, name := range names {
-		profile := cfg.Profiles[name]
+	if len(nameList) == 0 {
+		b.WriteString(LabelStyle.Render("暂无配置"))
+		b.WriteString("\n")
+		b.WriteString(HelpStyle.Render("按 a 添加 API 地址和 Token"))
+		b.WriteString("\n")
+	}
+	for i, name := range nameList {
+		profileMap := cfg.ProfileMap[name]
 		isActive := name == cfg.Active
 		isCursor := i == cursor
 
-		// 构建前缀: 光标 + 激活标记
 		var prefix string
 		if isCursor {
 			prefix = CursorStyle.Render("▸ ")
@@ -34,7 +38,6 @@ func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor
 			prefix += " "
 		}
 
-		// 名称行 - 紧凑无多余空格
 		var nameLine string
 		if isCursor {
 			nameLine = prefix + " " + SelectedItemStyle.Render(name)
@@ -45,24 +48,22 @@ func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor
 		b.WriteString(nameLine)
 		b.WriteString("\n")
 
-		// 详情行 - 对齐缩进
-		url, token := extractProfileInfo(profile)
+		summary := ag.SummarizeProfile(profileMap)
 
 		indent := "    "
 		b.WriteString(fmt.Sprintf("%s%s %s\n",
 			indent,
 			LabelStyle.Render("URL:"),
-			URLStyle.Render(url)))
+			URLStyle.Render(valueOrNA(summary.URL))))
 		b.WriteString(fmt.Sprintf("%s%s %s\n",
 			indent,
 			LabelStyle.Render("Key:"),
-			TokenStyle.Render(token)))
+			TokenStyle.Render(valueOrNA(summary.Token))))
 
-		// 分隔线 - 根据终端宽度动态生成
-		if i < len(names)-1 {
-			dividerWidth := width - 4 // 减去缩进的 4 个空格
+		if i < len(nameList)-1 {
+			dividerWidth := width - 4
 			if dividerWidth < 10 {
-				dividerWidth = 35 // 最小宽度
+				dividerWidth = 35
 			}
 			divider := strings.Repeat("─", dividerWidth)
 			b.WriteString(DividerStyle.Render(indent + divider))
@@ -70,7 +71,6 @@ func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor
 		}
 	}
 
-	// 操作消息
 	if message != "" {
 		b.WriteString("\n")
 		if msgIsErr {
@@ -81,29 +81,86 @@ func RenderProfiles(agentName string, cfg *config.Config, names []string, cursor
 		b.WriteString("\n")
 	}
 
-	// 帮助栏
 	b.WriteString("\n")
-	b.WriteString(HelpStyle.Render("↑/↓ 移动  •  Enter 切换  •  Esc 返回  •  q 退出"))
+	b.WriteString(HelpStyle.Render("↑/↓ 移动  •  Enter 切换  •  a 添加  •  Esc 返回  •  q 退出"))
 	b.WriteString("\n")
 
 	return b.String()
 }
 
-// extractProfileInfo 从 profile 中提取 URL 和 token 信息
-func extractProfileInfo(profile config.Profile) (url, token string) {
-	// 尝试 Claude 格式
-	if val, ok := profile.String(config.KeyAnthropicBaseURL); ok {
-		url = val
-		token = profile.MaskToken()
-		return
+// RenderAddProfile 渲染添加配置视图
+func RenderAddProfile(agentName string, step addStep, name string, apiURL string, token string, input string, cursor int, message string, msgIsErr bool) string {
+	var b strings.Builder
+
+	b.WriteString(TitleStyle.Render("⚡ 添加 " + agentName + " 配置"))
+	b.WriteString("\n")
+
+	writeAddLine(&b, "名称", name, input, cursor, step == addStepName, false)
+	writeAddLine(&b, "API", apiURL, input, cursor, step == addStepURL, false)
+	writeAddLine(&b, "Token", token, input, cursor, step == addStepToken, true)
+
+	if message != "" {
+		b.WriteString("\n")
+		if msgIsErr {
+			b.WriteString(ErrorStyle.Render("✗ " + message))
+		} else {
+			b.WriteString(SuccessStyle.Render("✓ " + message))
+		}
+		b.WriteString("\n")
 	}
 
-	// 尝试 Codex 格式
-	if val, ok := profile.String(config.KeyBaseURL); ok {
-		url = val
-		token = profile.MaskToken()
-		return
+	b.WriteString("\n")
+	b.WriteString(HelpStyle.Render("Enter 下一步  •  ←/→ 移动  •  Ctrl+U 清空  •  Esc 取消"))
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+func writeAddLine(b *strings.Builder, label string, savedValue string, input string, cursor int, active bool, mask bool) {
+	value := savedValue
+	if active {
+		value = renderInputWithCursor(input, cursor, mask)
+	} else if mask && value != "" {
+		value = strings.Repeat("*", len([]rune(value)))
+	}
+	if value == "" {
+		value = "待输入"
 	}
 
-	return "N/A", "N/A"
+	prefix := "  "
+	style := NormalItemStyle
+	if active {
+		prefix = CursorStyle.Render("▸ ")
+		style = SelectedItemStyle
+	}
+
+	b.WriteString(prefix)
+	b.WriteString(LabelStyle.Render(label + ": "))
+	b.WriteString(style.Render(value))
+	b.WriteString("\n")
+}
+
+func renderInputWithCursor(input string, cursor int, mask bool) string {
+	inputRuneList := []rune(input)
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor > len(inputRuneList) {
+		cursor = len(inputRuneList)
+	}
+
+	before := string(inputRuneList[:cursor])
+	after := string(inputRuneList[cursor:])
+	if mask {
+		before = strings.Repeat("*", cursor)
+		after = strings.Repeat("*", len(inputRuneList)-cursor)
+	}
+	return before + "▌" + after
+}
+
+func valueOrNA(value string) string {
+	if value == "" {
+		return "N/A"
+	}
+	return value
 }

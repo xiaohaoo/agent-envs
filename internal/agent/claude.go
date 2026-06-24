@@ -1,67 +1,91 @@
 package agent
 
 import (
-	"agent-envs/internal/config"
-	"agent-envs/internal/fileutil"
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"agent-envs/internal/config"
+	"agent-envs/internal/fileutil"
 )
 
-// Claude 实现 Claude Code 代理
+const (
+	claudeKey          = "claude"
+	claudeSettingsDir  = ".claude"
+	claudeSettingsFile = "settings.json"
+	claudeKeyEnv       = "env"
+	claudeKeyBaseURL   = "ANTHROPIC_BASE_URL"
+	claudeKeyAuthToken = "ANTHROPIC_AUTH_TOKEN"
+)
+
+// Claude manages Claude Code configuration.
 type Claude struct {
 	pm *config.PathManager
 }
 
-// NewClaude 创建 Claude 代理实例
 func NewClaude(pm *config.PathManager) *Claude {
 	return &Claude{pm: pm}
 }
 
-// Name 返回代理名称
+func (c *Claude) Key() string {
+	return claudeKey
+}
+
 func (c *Claude) Name() string {
 	return "Claude Code"
 }
 
-// LoadConfig 加载 Claude 配置
+func (c *Claude) Description() string {
+	return "Anthropic Claude Code"
+}
+
 func (c *Claude) LoadConfig() (*config.Config, error) {
-	return config.Load(c.pm.ClaudeConfig())
+	return config.Load(c.pm.AgentEnvsConfig(), c.Key())
 }
 
-// SaveConfig 保存 Claude 配置
 func (c *Claude) SaveConfig(cfg *config.Config) error {
-	return cfg.Save(c.pm.ClaudeConfig())
+	return cfg.Save(c.pm.AgentEnvsConfig(), c.Key())
 }
 
-// ApplyProfile 将 profile 应用到 ~/.claude/settings.json 的 env 字段
-func (c *Claude) ApplyProfile(name string, profile config.Profile) error {
-	path := c.pm.ClaudeSettings()
+// ApplyProfile merges profile values into ~/.claude/settings.json env.
+func (c *Claude) ApplyProfile(name string, profileMap config.Profile) error {
+	path := c.pm.HomePath(claudeSettingsDir, claudeSettingsFile)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("读取 %s 失败: %w", path, err)
+		return fmt.Errorf("read %s failed: %w", path, err)
 	}
 
-	var settings map[string]interface{}
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return fmt.Errorf("解析 %s 失败: %w", path, err)
+	settingsMap := make(map[string]any)
+	if err := json.Unmarshal(data, &settingsMap); err != nil {
+		return fmt.Errorf("parse %s failed: %w", path, err)
 	}
 
-	// 合并 env 字段：保留已有的环境变量，只覆盖 profile 中定义的 key
-	env, _ := settings[config.KeyEnv].(map[string]interface{})
-	if env == nil {
-		env = make(map[string]interface{})
+	envMap, _ := settingsMap[claudeKeyEnv].(map[string]any)
+	if envMap == nil {
+		envMap = make(map[string]any)
 	}
-	for k, v := range profile {
-		env[k] = v
+	for key, value := range profileMap {
+		envMap[key] = value
 	}
-	settings[config.KeyEnv] = env
+	settingsMap[claudeKeyEnv] = envMap
 
-	// 写回，保持缩进格式
-	out, err := fileutil.MarshalJSONNoTrailingNewline(settings)
+	out, err := fileutil.MarshalJSONNoTrailingNewline(settingsMap)
 	if err != nil {
 		return err
 	}
 
 	return fileutil.AtomicWrite(path, out, fileutil.ConfigFilePermission)
+}
+
+func (c *Claude) BuildProfile(input ProfileInput) config.Profile {
+	return config.Profile{
+		claudeKeyBaseURL:   input.APIURL,
+		claudeKeyAuthToken: input.Token,
+	}
+}
+
+func (c *Claude) SummarizeProfile(profileMap config.Profile) ProfileSummary {
+	url, _ := profileMap.String(claudeKeyBaseURL)
+	return ProfileSummary{URL: url, Token: profileMap.MaskToken()}
 }

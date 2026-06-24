@@ -6,6 +6,8 @@ import (
 )
 
 const (
+	// ConfigDirPermission 配置目录权限
+	ConfigDirPermission = 0755
 	// ConfigFilePermission 配置文件权限
 	ConfigFilePermission = 0644
 	// AuthFilePermission 认证文件权限

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-`agent-envs` 是一个用于切换 Claude Code 和 Codex CLI 配置档的终端界面工具。你可以把常用服务商配置集中写在 TOML 文件里，通过交互式界面选择目标配置，然后让程序把对应值写入各自原生配置文件。
+`agent-envs` 是一个用于切换 Claude Code 和 Codex CLI 配置档的终端界面工具。你可以把常用服务商配置集中写在一个 TOML 文件里，通过交互式界面选择目标配置，然后让程序把对应值写入各自原生配置文件。
 
 ## 功能特性
 
@@ -61,27 +61,31 @@ make install
 
 ## 快速开始
 
-1. 创建一个或两个配置文件：
-   - `~/.claude/agent-envs.toml`
-   - `~/.codex/agent-envs.toml`
+1. 创建统一配置文件：
+   - Windows：`%AppData%\agent-envs\config.toml`
+   - macOS：`~/Library/Application Support/agent-envs/config.toml`
+   - Linux：`~/.config/agent-envs/config.toml`
 2. 运行 `agent-envs`
 3. 选择 `Claude Code` 或 `Codex`
 4. 选中想要启用的配置档
 
 ## 配置说明
 
+所有可复用配置档都写在 `os.UserConfigDir()/agent-envs/config.toml` 中。Claude 和 Codex 在同一个文件里分别维护自己的 active 配置。
+
 ### Claude Code
 
-配置文件：`~/.claude/agent-envs.toml`
+配置段：统一配置文件中的 `[claude]`
 
 ```toml
+[claude]
 active = "主服务商"
 
-["主服务商"]
+[claude.profiles."主服务商"]
 ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 ANTHROPIC_BASE_URL = "https://api.example.com"
 
-["备用服务商"]
+[claude.profiles."备用服务商"]
 ANTHROPIC_AUTH_TOKEN = "sk-ant-..."
 ANTHROPIC_BASE_URL = "https://api.backup.example.com"
 ```
@@ -104,18 +108,19 @@ Claude 配置档会被当作原始环境变量处理：
 
 ### Codex CLI
 
-配置文件：`~/.codex/agent-envs.toml`
+配置段：统一配置文件中的 `[codex]`
 
 ```toml
+[codex]
 active = "主服务商"
 
-["主服务商"]
+[codex.profiles."主服务商"]
 base_url = "https://api.example.com"
 wire_api = "responses"
 requires_openai_auth = true
 OPENAI_API_KEY = "sk-..."
 
-["备用服务商"]
+[codex.profiles."备用服务商"]
 base_url = "https://api.backup.example.com"
 wire_api = "responses"
 requires_openai_auth = true
@@ -129,7 +134,7 @@ OPENAI_API_KEY = "sk-..."
 - `requires_openai_auth` -> `[model_providers."<配置名>"].requires_openai_auth`
 - `OPENAI_API_KEY` -> `~/.codex/auth.json`
 
-provider 的 `name` 字段会始终由配置档名称自动写入。`~/.codex/agent-envs.toml` 里额外存在的键会保留在这个文件中，但不会被写进 Codex 原生配置文件。
+provider 的 `name` 字段会始终由配置档名称自动写入。Codex 配置段里额外存在的键会保留在统一配置文件中，但不会被写进 Codex 原生配置文件。
 
 切换 Codex 配置时，所选配置档名称会成为当前 `model_provider`。此外，`agent-envs` 还会：
 
@@ -166,28 +171,31 @@ agent-envs --version
 
 - `↑/↓` 或 `k/j`：移动
 - `Enter` 或 `Space`：切换到当前选中的配置
+- `a`：输入名称、API 地址和 Token 来添加配置
 - `Esc`：返回代理选择界面
 - `q` 或 `Ctrl+C`：退出
+
+添加 Claude 配置时，`agent-envs` 会写入 `ANTHROPIC_BASE_URL` 和 `ANTHROPIC_AUTH_TOKEN`。添加 Codex 配置时，会写入 `base_url`、`OPENAI_API_KEY`、`wire_api = "responses"` 和 `requires_openai_auth = true`。
 
 ## 切换时会改哪些文件
 
 ### Claude Code
 
-1. 读取 `~/.claude/agent-envs.toml`
+1. 读取 `os.UserConfigDir()/agent-envs/config.toml`
 2. 将所选配置合并到 `~/.claude/settings.json` 的 `env` 字段
 3. 新配置未声明的已有 `env` 键保持不变
-4. 更新 `~/.claude/agent-envs.toml` 中的 `active`
+4. 更新统一配置文件中 `[claude]` 段的 `active`
 
 ### Codex CLI
 
-1. 读取 `~/.codex/agent-envs.toml`
+1. 读取 `os.UserConfigDir()/agent-envs/config.toml`
 2. 更新 `~/.codex/config.toml` 顶层的 `model_provider`
 3. 用 `name`、`base_url`、`wire_api` 以及可选的 `requires_openai_auth` 替换或创建当前选中的 `[model_providers."<配置名>"]`
 4. 保留其他无关的 Codex 顶层设置和 provider 配置
 5. 仅在当前配置档包含 `OPENAI_API_KEY` 时，才将其合并写入 `~/.codex/auth.json`
 6. 保留 `~/.codex/auth.json` 中其他已有认证字段
 7. 以 `0600` 权限写入 `~/.codex/auth.json`
-8. 更新 `~/.codex/agent-envs.toml` 中的 `active`
+8. 更新统一配置文件中 `[codex]` 段的 `active`
 
 ## 界面预览
 
@@ -213,7 +221,7 @@ agent-envs --version
     URL: https://api.backup.example.com
     Key: sk-ant-****wxyz
 
-↑/↓ 移动  •  Enter 切换  •  Esc 返回  •  q 退出
+↑/↓ 移动  •  Enter 切换  •  a 添加  •  Esc 返回  •  q 退出
 ```
 
 ## 开发
@@ -229,11 +237,7 @@ agent-envs/
 │   │   ├── claude.go               # Claude Code 实现
 │   │   └── codex.go                # Codex CLI 实现
 │   ├── config/
-│   │   ├── config.go               # 配置加载与保存
-│   │   ├── errors.go               # 配置相关错误
-│   │   ├── keys.go                 # 共用配置键
-│   │   ├── paths.go                # 路径管理
-│   │   └── profile.go              # Profile 辅助方法
+│   │   └── config.go               # 配置加载、路径、键名与 Profile 辅助方法
 │   ├── fileutil/
 │   │   ├── atomic.go               # 原子写文件
 │   │   └── json.go                 # JSON 辅助方法
@@ -303,17 +307,15 @@ git push origin v1.0.0
 
 ### 找不到配置文件
 
-先创建配置目录：
+先按上面的示例创建统一配置文件，默认路径是 `os.UserConfigDir()/agent-envs/config.toml`。原生工具目录只需要在对应工具写入配置时存在：
 
 ```bash
 mkdir -p ~/.claude ~/.codex
 ```
 
-然后按上面的示例创建对应的配置文件。
-
 ### `active` 指向了不存在的配置档
 
-请确认 `active = "..."` 指向的名称和 `agent-envs.toml` 里的某个 section 完全一致。如果 `active` 对应的配置档不存在，程序会拒绝加载。
+请确认 `active = "..."` 指向的名称和 `[claude.profiles]` 或 `[codex.profiles]` 下的某个配置档完全一致。如果 `active` 对应的配置档不存在，程序会拒绝加载。
 
 ### Claude Code 的 `settings.json` 不存在
 

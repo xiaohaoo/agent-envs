@@ -1,26 +1,18 @@
 package ui
 
-import "strings"
-
-// AgentOption 代理选项
-type AgentOption struct {
-	Name string
-	Desc string
-}
-
-var agentOptions = []AgentOption{
-	{"Claude Code", "Anthropic Claude Code"},
-	{"Codex", "Codex CLI"},
-}
+import (
+	"agent-envs/internal/agent"
+	"strings"
+)
 
 // RenderSelector 渲染代理选择视图
-func RenderSelector(cursor int, message string, msgIsErr bool) string {
+func RenderSelector(agentList []agent.Agent, cursor int, message string, msgIsErr bool) string {
 	var b strings.Builder
 
 	b.WriteString(TitleStyle.Render("⚡ 选择代理类型"))
 	b.WriteString("\n\n")
 
-	for i, option := range agentOptions {
+	for i, ag := range agentList {
 		isCursor := i == cursor
 		var prefix string
 		if isCursor {
@@ -31,9 +23,9 @@ func RenderSelector(cursor int, message string, msgIsErr bool) string {
 
 		var line string
 		if isCursor {
-			line = prefix + SelectedItemStyle.Render(option.Name) + " " + LabelStyle.Render("("+option.Desc+")")
+			line = prefix + SelectedItemStyle.Render(ag.Name()) + " " + LabelStyle.Render("("+ag.Description()+")")
 		} else {
-			line = prefix + NormalItemStyle.Render(option.Name) + " " + LabelStyle.Render("("+option.Desc+")")
+			line = prefix + NormalItemStyle.Render(ag.Name()) + " " + LabelStyle.Render("("+ag.Description()+")")
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
