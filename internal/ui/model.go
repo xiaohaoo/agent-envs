@@ -11,12 +11,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type addStep int
+type profileFormStep int
 
 const (
-	addStepName addStep = iota
-	addStepURL
-	addStepToken
+	profileFormStepName profileFormStep = iota
 )
 
 // Model Bubble Tea 模型
@@ -33,12 +31,16 @@ type Model struct {
 	selecting        bool                // 是否在选择代理类型阶段
 	width            int                 // 终端宽度
 	adding           bool                // 是否在添加配置阶段
-	addStep          addStep             // 当前添加步骤
+	editing          bool                // 是否在修改配置阶段
+	deleting         bool                // 是否在删除确认阶段
+	formStep         profileFormStep     // 当前表单步骤
+	editName         string              // 正在修改的原配置名称
+	deleteName       string              // 待删除配置名称
 	addName          string              // 待添加配置名称
-	addURL           string              // 待添加 API 地址
-	addToken         string              // 待添加 token
-	addInputRuneList []rune              // 当前输入框内容
-	addCursor        int                 // 添加表单输入光标位置
+	formFieldList    []agent.ProfileField
+	formValueMap     map[string]string
+	addInputRuneList []rune // 当前输入框内容
+	addCursor        int    // 添加表单输入光标位置
 }
 
 // NewModel 创建新的 UI 模型
@@ -63,8 +65,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 
 	case tea.KeyMsg:
-		if m.adding {
+		if m.adding || m.editing {
 			return m.updateAddForm(msg)
+		}
+		if m.deleting {
+			return m.updateDeleteConfirm(msg)
 		}
 
 		switch msg.String() {
@@ -130,6 +135,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.selecting {
 				m.startAdd()
 			}
+
+		case "e":
+			if !m.selecting {
+				m.startEdit()
+			}
+
+		case "d":
+			if !m.selecting {
+				m.startDelete()
+			}
 		}
 	}
 
@@ -146,8 +161,16 @@ func (m Model) View() string {
 		return RenderSelector(m.agentList, m.cursor, m.message, m.msgIsErr)
 	}
 
-	if m.adding {
-		return RenderAddProfile(m.agent.Name(), m.addStep, m.addName, m.addURL, m.addToken, m.addInputValue(), m.addCursor, m.message, m.msgIsErr)
+	if m.adding || m.editing {
+		action := "添加"
+		if m.editing {
+			action = "修改"
+		}
+		return RenderProfileForm(action, m.agent.Name(), m.formStep, m.addName, m.formFieldList, m.formValueMap, m.addInputValue(), m.addCursor, m.message, m.msgIsErr)
+	}
+
+	if m.deleting {
+		return RenderDeleteProfile(m.agent.Name(), m.deleteName, m.deleteName == m.cfg.Active, m.message, m.msgIsErr)
 	}
 
 	return RenderProfiles(m.agent, m.cfg, m.nameList, m.cursor, m.message, m.msgIsErr, m.width)
@@ -250,19 +273,32 @@ func (m *Model) startAdd() {
 	}
 
 	m.adding = true
-	m.addStep = addStepName
+	m.editing = false
+	m.deleting = false
+	m.formStep = profileFormStepName
+	m.editName = ""
 	m.addName = ""
-	m.addURL = ""
-	m.addToken = ""
+	m.formFieldList = nil
+	if m.agent != nil {
+		m.formFieldList = m.agent.ProfileFieldList()
+	}
+	m.formValueMap = make(map[string]string, len(m.formFieldList))
 	m.resetAddInput()
 	m.message = ""
 	m.msgIsErr = false
 }
 
 func (m *Model) cancelAdd() {
+	wasEditing := m.editing
 	m.adding = false
+	m.editing = false
+	m.editName = ""
 	m.resetAddInput()
-	m.message = "已取消添加配置"
+	if wasEditing {
+		m.message = "已取消修改配置"
+	} else {
+		m.message = "已取消添加配置"
+	}
 	m.msgIsErr = false
 }
 
@@ -274,25 +310,33 @@ func (m *Model) submitAddInput() {
 		return
 	}
 
-	switch m.addStep {
-	case addStepName:
-		if _, exists := m.cfg.ProfileMap[value]; exists {
+	switch m.formStep {
+	case profileFormStepName:
+		if _, exists := m.cfg.ProfileMap[value]; exists && (!m.editing || value != m.editName) {
 			m.message = fmt.Sprintf("配置「%s」已存在", value)
 			m.msgIsErr = true
 			return
 		}
 		m.addName = value
-		m.addStep = addStepURL
-	case addStepURL:
-		m.addURL = value
-		m.addStep = addStepToken
-	case addStepToken:
-		m.addToken = value
+	default:
+		field, ok := m.currentProfileField()
+		if !ok {
+			m.message = "表单字段无效"
+			m.msgIsErr = true
+			return
+		}
+		m.formValueMap[field.Key] = value
+	}
+
+	if !m.advanceProfileFormStep() {
+		if m.editing {
+			m.finishEdit()
+			return
+		}
 		m.finishAdd()
 		return
 	}
-
-	m.resetAddInput()
+	m.setAddInput(m.currentProfileFormValue())
 	m.message = ""
 	m.msgIsErr = false
 }
@@ -319,6 +363,39 @@ func (m *Model) addInputValue() string {
 func (m *Model) resetAddInput() {
 	m.addInputRuneList = nil
 	m.addCursor = 0
+}
+
+func (m *Model) setAddInput(value string) {
+	m.addInputRuneList = cleanInputRuneList([]rune(value))
+	m.addCursor = len(m.addInputRuneList)
+}
+
+func (m *Model) currentProfileField() (agent.ProfileField, bool) {
+	fieldIndex := int(m.formStep) - 1
+	if fieldIndex < 0 || fieldIndex >= len(m.formFieldList) {
+		return agent.ProfileField{}, false
+	}
+	return m.formFieldList[fieldIndex], true
+}
+
+func (m *Model) currentProfileFormValue() string {
+	if m.formStep == profileFormStepName {
+		return m.addName
+	}
+
+	field, ok := m.currentProfileField()
+	if !ok {
+		return ""
+	}
+	return m.formValueMap[field.Key]
+}
+
+func (m *Model) advanceProfileFormStep() bool {
+	if int(m.formStep) >= len(m.formFieldList) {
+		return false
+	}
+	m.formStep++
+	return true
 }
 
 func (m *Model) insertAddInputRuneList(inputRuneList []rune) {
@@ -396,7 +473,7 @@ func (m *Model) finishAdd() {
 		m.cfg.ProfileMap = make(map[string]config.Profile)
 	}
 
-	m.cfg.ProfileMap[m.addName] = m.agent.BuildProfile(agent.ProfileInput{APIURL: m.addURL, Token: m.addToken})
+	m.cfg.ProfileMap[m.addName] = m.agent.BuildProfile(agent.ProfileInput{FieldValueMap: m.formValueMap})
 	if err := m.agent.SaveConfig(m.cfg); err != nil {
 		m.message = fmt.Sprintf("保存配置失败: %v", err)
 		m.msgIsErr = true
@@ -416,6 +493,199 @@ func (m *Model) finishAdd() {
 	m.resetAddInput()
 	m.message = fmt.Sprintf("已添加配置「%s」，按 Enter 切换", name)
 	m.msgIsErr = false
+}
+
+func (m *Model) startEdit() {
+	if len(m.nameList) == 0 {
+		m.message = "暂无配置可修改"
+		m.msgIsErr = true
+		return
+	}
+
+	m.clampProfileCursor()
+	name := m.nameList[m.cursor]
+	profileMap := m.cfg.ProfileMap[name]
+
+	m.adding = false
+	m.editing = true
+	m.deleting = false
+	m.formStep = profileFormStepName
+	m.editName = name
+	m.addName = name
+	m.formFieldList = m.agent.ProfileFieldList()
+	m.formValueMap = make(map[string]string, len(m.formFieldList))
+	for _, field := range m.formFieldList {
+		if value, ok := profileMap.String(field.Key); ok {
+			m.formValueMap[field.Key] = value
+		}
+	}
+	m.setAddInput(name)
+	m.message = ""
+	m.msgIsErr = false
+}
+
+func (m *Model) finishEdit() {
+	if m.cfg == nil {
+		m.cfg = &config.Config{ProfileMap: make(map[string]config.Profile)}
+	}
+	if m.cfg.ProfileMap == nil {
+		m.cfg.ProfileMap = make(map[string]config.Profile)
+	}
+
+	oldName := m.editName
+	oldProfileMap := m.cfg.ProfileMap[oldName]
+	oldActive := m.cfg.Active
+
+	nextProfileMap := make(config.Profile, len(oldProfileMap)+4)
+	for key, value := range oldProfileMap {
+		nextProfileMap[key] = value
+	}
+	for key, value := range m.agent.BuildProfile(agent.ProfileInput{FieldValueMap: m.formValueMap}) {
+		nextProfileMap[key] = value
+	}
+
+	if m.addName != oldName {
+		delete(m.cfg.ProfileMap, oldName)
+	}
+	m.cfg.ProfileMap[m.addName] = nextProfileMap
+	if oldActive == oldName {
+		m.cfg.Active = m.addName
+	}
+
+	if oldActive == oldName {
+		if err := m.agent.ApplyProfile(m.addName, nextProfileMap); err != nil {
+			if m.addName != oldName {
+				delete(m.cfg.ProfileMap, m.addName)
+			}
+			m.cfg.ProfileMap[oldName] = oldProfileMap
+			m.cfg.Active = oldActive
+			m.message = fmt.Sprintf("写入设置失败: %v", err)
+			m.msgIsErr = true
+			return
+		}
+	}
+
+	if err := m.agent.SaveConfig(m.cfg); err != nil {
+		if m.addName != oldName {
+			delete(m.cfg.ProfileMap, m.addName)
+		}
+		m.cfg.ProfileMap[oldName] = oldProfileMap
+		m.cfg.Active = oldActive
+		m.message = fmt.Sprintf("保存配置失败: %v", err)
+		m.msgIsErr = true
+		return
+	}
+
+	name := m.addName
+	m.nameList = m.cfg.SortedNames()
+	for i, currentName := range m.nameList {
+		if currentName == name {
+			m.cursor = i
+			break
+		}
+	}
+
+	m.editing = false
+	m.editName = ""
+	m.resetAddInput()
+	m.message = fmt.Sprintf("已修改配置「%s」", name)
+	m.msgIsErr = false
+}
+
+func (m *Model) startDelete() {
+	if len(m.nameList) == 0 {
+		m.message = "暂无配置可删除"
+		m.msgIsErr = true
+		return
+	}
+
+	m.clampProfileCursor()
+	m.adding = false
+	m.editing = false
+	m.deleting = true
+	m.deleteName = m.nameList[m.cursor]
+	m.message = ""
+	m.msgIsErr = false
+}
+
+func (m Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "q":
+		m.quitting = true
+		return m, tea.Quit
+	case "esc", "n":
+		m.deleting = false
+		m.deleteName = ""
+		m.message = "已取消删除配置"
+		m.msgIsErr = false
+		return m, nil
+	case "y":
+		m.finishDelete()
+		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m *Model) finishDelete() {
+	if m.cfg == nil || m.cfg.ProfileMap == nil {
+		m.deleting = false
+		m.message = "暂无配置可删除"
+		m.msgIsErr = true
+		return
+	}
+
+	name := m.deleteName
+	oldProfileMap := m.cfg.ProfileMap[name]
+	if oldProfileMap == nil {
+		m.deleting = false
+		m.deleteName = ""
+		m.message = fmt.Sprintf("配置「%s」不存在", name)
+		m.msgIsErr = true
+		return
+	}
+
+	oldActive := m.cfg.Active
+	delete(m.cfg.ProfileMap, name)
+	if m.cfg.Active == name {
+		m.cfg.Active = ""
+	}
+
+	if err := m.agent.SaveConfig(m.cfg); err != nil {
+		m.cfg.ProfileMap[name] = oldProfileMap
+		m.cfg.Active = oldActive
+		m.deleting = false
+		m.deleteName = ""
+		m.message = fmt.Sprintf("保存配置失败: %v", err)
+		m.msgIsErr = true
+		return
+	}
+
+	m.nameList = m.cfg.SortedNames()
+	if m.cursor >= len(m.nameList) {
+		m.cursor = len(m.nameList) - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+
+	m.deleting = false
+	m.deleteName = ""
+	m.message = fmt.Sprintf("已删除配置「%s」", name)
+	m.msgIsErr = false
+}
+
+func (m *Model) clampProfileCursor() {
+	if m.cursor < 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor >= len(m.nameList) {
+		m.cursor = len(m.nameList) - 1
+	}
 }
 
 // doSwitch 执行切换配置的操作

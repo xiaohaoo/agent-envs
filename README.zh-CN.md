@@ -171,11 +171,13 @@ agent-envs --version
 
 - `↑/↓` 或 `k/j`：移动
 - `Enter` 或 `Space`：切换到当前选中的配置
-- `a`：输入名称、API 地址和 Token 来添加配置
+- `a`：按当前代理需要的字段添加配置
+- `e`：修改当前选中的配置
+- `d`：二次确认后删除当前选中的配置
 - `Esc`：返回代理选择界面
 - `q` 或 `Ctrl+C`：退出
 
-添加 Claude 配置时，`agent-envs` 会写入 `ANTHROPIC_BASE_URL` 和 `ANTHROPIC_AUTH_TOKEN`。添加 Codex 配置时，会写入 `base_url`、`OPENAI_API_KEY`、`wire_api = "responses"` 和 `requires_openai_auth = true`。
+添加或修改 Claude 配置时，`agent-envs` 会写入 `ANTHROPIC_BASE_URL` 和 `ANTHROPIC_AUTH_TOKEN`。添加或修改 Codex 配置时，会写入 `base_url`、`OPENAI_API_KEY`、`wire_api = "responses"` 和 `requires_openai_auth = true`。
 
 ## 切换时会改哪些文件
 

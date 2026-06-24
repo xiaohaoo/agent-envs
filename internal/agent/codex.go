@@ -89,18 +89,29 @@ func (c *Codex) ApplyProfile(name string, profileMap config.Profile) error {
 	return nil
 }
 
-func (c *Codex) BuildProfile(input ProfileInput) config.Profile {
-	return config.Profile{
-		codexKeyBaseURL:            input.APIURL,
-		codexKeyWireAPI:            "responses",
-		codexKeyRequiresOpenAIAuth: true,
-		codexKeyOpenAIAPIKey:       input.Token,
+func (c *Codex) ProfileFieldList() []ProfileField {
+	return []ProfileField{
+		{Key: codexKeyBaseURL, Label: "API", Secret: false},
+		{Key: codexKeyOpenAIAPIKey, Label: "Token", Secret: true},
 	}
 }
 
-func (c *Codex) SummarizeProfile(profileMap config.Profile) ProfileSummary {
+func (c *Codex) BuildProfile(input ProfileInput) config.Profile {
+	return config.Profile{
+		codexKeyBaseURL:            input.FieldValueMap[codexKeyBaseURL],
+		codexKeyWireAPI:            "responses",
+		codexKeyRequiresOpenAIAuth: true,
+		codexKeyOpenAIAPIKey:       input.FieldValueMap[codexKeyOpenAIAPIKey],
+	}
+}
+
+func (c *Codex) ProfileSummaryItemList(profileMap config.Profile) []ProfileSummaryItem {
 	url, _ := profileMap.String(codexKeyBaseURL)
-	return ProfileSummary{URL: url, Token: profileMap.MaskToken()}
+	token, _ := profileMap.String(codexKeyOpenAIAPIKey)
+	return []ProfileSummaryItem{
+		{Label: "API", Value: url},
+		{Label: "Token", Value: token, Secret: true},
+	}
 }
 
 func (c *Codex) writeConfigToml(name string, profileMap config.Profile) error {

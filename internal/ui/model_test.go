@@ -4,17 +4,21 @@ import (
 	"agent-envs/internal/agent"
 	"agent-envs/internal/config"
 	"errors"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type fakeAgent struct {
-	key      string
-	name     string
-	savedCfg *config.Config
-	applyErr error
-	saveErr  error
+	key               string
+	name              string
+	savedCfg          *config.Config
+	appliedName       string
+	appliedProfileMap config.Profile
+	applyCount        int
+	applyErr          error
+	saveErr           error
 }
 
 func (f *fakeAgent) Key() string {
@@ -45,19 +49,33 @@ func (f *fakeAgent) ApplyProfile(name string, profileMap config.Profile) error {
 	if f.applyErr != nil {
 		return f.applyErr
 	}
+	f.appliedName = name
+	f.appliedProfileMap = profileMap
+	f.applyCount++
 	return nil
+}
+
+func (f *fakeAgent) ProfileFieldList() []agent.ProfileField {
+	return []agent.ProfileField{
+		{Key: "api_url", Label: "Endpoint"},
+		{Key: "token", Label: "Secret", Secret: true},
+	}
 }
 
 func (f *fakeAgent) BuildProfile(input agent.ProfileInput) config.Profile {
 	return config.Profile{
-		"api_url": input.APIURL,
-		"token":   input.Token,
+		"api_url": input.FieldValueMap["api_url"],
+		"token":   input.FieldValueMap["token"],
 	}
 }
 
-func (f *fakeAgent) SummarizeProfile(profileMap config.Profile) agent.ProfileSummary {
+func (f *fakeAgent) ProfileSummaryItemList(profileMap config.Profile) []agent.ProfileSummaryItem {
 	url, _ := profileMap.String("api_url")
-	return agent.ProfileSummary{URL: url, Token: profileMap.MaskToken()}
+	token, _ := profileMap.String("token")
+	return []agent.ProfileSummaryItem{
+		{Label: "Endpoint", Value: url},
+		{Label: "Secret", Value: token, Secret: true},
+	}
 }
 
 func TestAddProfileUsesAgentBuilder(t *testing.T) {
@@ -99,6 +117,177 @@ func TestAddProfileUsesAgentBuilder(t *testing.T) {
 	}
 	if fakeAgent.savedCfg.Active != "" {
 		t.Fatalf("active = %q, want empty before explicit switch", fakeAgent.savedCfg.Active)
+	}
+}
+
+func TestEditProfileRenamesAndPreservesExtraFields(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := Model{
+		agent: fakeAgent,
+		cfg: &config.Config{
+			Active: "旧配置",
+			ProfileMap: map[string]config.Profile{
+				"旧配置": {
+					"api_url": "https://old.example.com",
+					"token":   "old-token",
+					"extra":   "keep-me",
+				},
+			},
+		},
+		nameList:  []string{"旧配置"},
+		selecting: false,
+	}
+
+	model = updateModel(t, model, keyRunes("e"))
+	if !model.editing {
+		t.Fatal("expected edit form to be active")
+	}
+
+	model = updateModel(t, model, keyType(tea.KeyCtrlU))
+	model = updateModel(t, model, keyRunes("新配置"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+	model = updateModel(t, model, keyType(tea.KeyCtrlU))
+	model = updateModel(t, model, keyRunes("https://new.example.com"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+	model = updateModel(t, model, keyType(tea.KeyCtrlU))
+	model = updateModel(t, model, keyRunes("new-token"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+
+	if model.editing {
+		t.Fatal("expected edit form to close")
+	}
+	if fakeAgent.savedCfg == nil {
+		t.Fatal("expected config to be saved")
+	}
+	if _, exists := fakeAgent.savedCfg.ProfileMap["旧配置"]; exists {
+		t.Fatal("expected old profile name to be removed")
+	}
+	profileMap := fakeAgent.savedCfg.ProfileMap["新配置"]
+	if profileMap == nil {
+		t.Fatal("expected renamed profile")
+	}
+	if got, _ := profileMap.String("api_url"); got != "https://new.example.com" {
+		t.Fatalf("api_url = %q", got)
+	}
+	if got, _ := profileMap.String("token"); got != "new-token" {
+		t.Fatalf("token = %q", got)
+	}
+	if got, _ := profileMap.String("extra"); got != "keep-me" {
+		t.Fatalf("extra = %q", got)
+	}
+	if fakeAgent.savedCfg.Active != "新配置" {
+		t.Fatalf("active = %q, want 新配置", fakeAgent.savedCfg.Active)
+	}
+	if fakeAgent.appliedName != "新配置" {
+		t.Fatalf("appliedName = %q, want 新配置", fakeAgent.appliedName)
+	}
+	if fakeAgent.applyCount != 1 {
+		t.Fatalf("applyCount = %d, want 1", fakeAgent.applyCount)
+	}
+	if got, _ := fakeAgent.appliedProfileMap.String("token"); got != "new-token" {
+		t.Fatalf("applied token = %q", got)
+	}
+}
+
+func TestDeleteActiveProfileClearsActive(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := Model{
+		agent: fakeAgent,
+		cfg: &config.Config{
+			Active: "old",
+			ProfileMap: map[string]config.Profile{
+				"old": {"token": "old-token"},
+				"new": {"token": "new-token"},
+			},
+		},
+		nameList:  []string{"old", "new"},
+		cursor:    0,
+		selecting: false,
+	}
+
+	model = updateModel(t, model, keyRunes("d"))
+	if !model.deleting {
+		t.Fatal("expected delete confirmation")
+	}
+	model = updateModel(t, model, keyRunes("y"))
+
+	if model.deleting {
+		t.Fatal("expected delete confirmation to close")
+	}
+	if fakeAgent.savedCfg == nil {
+		t.Fatal("expected config to be saved")
+	}
+	if _, exists := fakeAgent.savedCfg.ProfileMap["old"]; exists {
+		t.Fatal("expected old profile to be deleted")
+	}
+	if fakeAgent.savedCfg.Active != "" {
+		t.Fatalf("active = %q, want empty", fakeAgent.savedCfg.Active)
+	}
+	if len(model.nameList) != 1 || model.nameList[0] != "new" {
+		t.Fatalf("nameList = %#v", model.nameList)
+	}
+}
+
+func TestDeleteProfileCanBeCancelled(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := switchModel(fakeAgent)
+	model.cursor = 0
+
+	model = updateModel(t, model, keyRunes("d"))
+	model = updateModel(t, model, keyRunes("n"))
+
+	if model.deleting {
+		t.Fatal("expected delete confirmation to close")
+	}
+	if fakeAgent.savedCfg != nil {
+		t.Fatal("expected config not to be saved")
+	}
+	if _, exists := model.cfg.ProfileMap["old"]; !exists {
+		t.Fatal("expected profile to remain")
+	}
+}
+
+func TestDeleteProfileRequiresExplicitY(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := switchModel(fakeAgent)
+	model.cursor = 0
+
+	model = updateModel(t, model, keyRunes("d"))
+	model = updateModel(t, model, keyType(tea.KeyEnter))
+
+	if !model.deleting {
+		t.Fatal("expected delete confirmation to remain open")
+	}
+	if fakeAgent.savedCfg != nil {
+		t.Fatal("expected config not to be saved")
+	}
+	if _, exists := model.cfg.ProfileMap["old"]; !exists {
+		t.Fatal("expected profile to remain")
+	}
+}
+
+func TestDeleteConfirmQQuits(t *testing.T) {
+	fakeAgent := &fakeAgent{key: "demo", name: "Demo Agent"}
+	model := switchModel(fakeAgent)
+
+	model = updateModel(t, model, keyRunes("d"))
+	model = updateModel(t, model, keyRunes("q"))
+
+	if !model.quitting {
+		t.Fatal("expected q to quit from delete confirmation")
+	}
+	if fakeAgent.savedCfg != nil {
+		t.Fatal("expected config not to be saved")
+	}
+}
+
+func TestDeleteActiveProfileViewWarnsAboutActive(t *testing.T) {
+	view := RenderDeleteProfile("Demo Agent", "old", true, "", false)
+	if !strings.Contains(view, "删除后将清空 active") {
+		t.Fatalf("expected active delete warning in view: %q", view)
+	}
+	if strings.Contains(view, "Enter 确认删除") {
+		t.Fatalf("expected enter not to confirm delete: %q", view)
 	}
 }
 

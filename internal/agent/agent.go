@@ -2,16 +2,23 @@ package agent
 
 import "agent-envs/internal/config"
 
-// ProfileInput 是 UI 收集到的通用服务商信息。
-type ProfileInput struct {
-	APIURL string
-	Token  string
+// ProfileField 是创建或修改 profile 时需要用户填写的字段。
+type ProfileField struct {
+	Key    string
+	Label  string
+	Secret bool
 }
 
-// ProfileSummary 是配置列表中展示的通用信息。
-type ProfileSummary struct {
-	URL   string
-	Token string
+// ProfileInput 是 UI 收集到的 profile 字段值。
+type ProfileInput struct {
+	FieldValueMap map[string]string
+}
+
+// ProfileSummaryItem 是配置列表中展示的一行摘要。
+type ProfileSummaryItem struct {
+	Label  string
+	Value  string
+	Secret bool
 }
 
 // Agent 抽象不同代理的配置管理。
@@ -34,11 +41,14 @@ type Agent interface {
 	// ApplyProfile 将 profile 应用到代理的设置文件。
 	ApplyProfile(name string, profileMap config.Profile) error
 
-	// BuildProfile 将通用输入转换为该代理自己的配置结构。
+	// ProfileFieldList 返回创建或修改 profile 时需要填写的字段。
+	ProfileFieldList() []ProfileField
+
+	// BuildProfile 将 UI 输入转换为该代理自己的配置结构。
 	BuildProfile(input ProfileInput) config.Profile
 
-	// SummarizeProfile 返回配置列表中展示的 URL 和 token。
-	SummarizeProfile(profileMap config.Profile) ProfileSummary
+	// ProfileSummaryItemList 返回配置列表中展示的摘要字段。
+	ProfileSummaryItemList(profileMap config.Profile) []ProfileSummaryItem
 }
 
 // Available 返回当前内置支持的代理列表。

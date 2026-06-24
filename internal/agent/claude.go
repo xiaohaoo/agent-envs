@@ -78,14 +78,25 @@ func (c *Claude) ApplyProfile(name string, profileMap config.Profile) error {
 	return fileutil.AtomicWrite(path, out, fileutil.ConfigFilePermission)
 }
 
-func (c *Claude) BuildProfile(input ProfileInput) config.Profile {
-	return config.Profile{
-		claudeKeyBaseURL:   input.APIURL,
-		claudeKeyAuthToken: input.Token,
+func (c *Claude) ProfileFieldList() []ProfileField {
+	return []ProfileField{
+		{Key: claudeKeyBaseURL, Label: "API", Secret: false},
+		{Key: claudeKeyAuthToken, Label: "Token", Secret: true},
 	}
 }
 
-func (c *Claude) SummarizeProfile(profileMap config.Profile) ProfileSummary {
+func (c *Claude) BuildProfile(input ProfileInput) config.Profile {
+	return config.Profile{
+		claudeKeyBaseURL:   input.FieldValueMap[claudeKeyBaseURL],
+		claudeKeyAuthToken: input.FieldValueMap[claudeKeyAuthToken],
+	}
+}
+
+func (c *Claude) ProfileSummaryItemList(profileMap config.Profile) []ProfileSummaryItem {
 	url, _ := profileMap.String(claudeKeyBaseURL)
-	return ProfileSummary{URL: url, Token: profileMap.MaskToken()}
+	token, _ := profileMap.String(claudeKeyAuthToken)
+	return []ProfileSummaryItem{
+		{Label: "API", Value: url},
+		{Label: "Token", Value: token, Secret: true},
+	}
 }

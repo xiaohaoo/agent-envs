@@ -171,11 +171,13 @@ agent-envs --version
 
 - `↑/↓` or `k/j` to move
 - `Enter` or `Space` to switch to the selected profile
-- `a` to add a profile by entering a name, API URL, and token
+- `a` to add a profile by entering the fields required by the selected agent
+- `e` to edit the selected profile
+- `d` to delete the selected profile after confirmation
 - `Esc` to return to agent selection
 - `q` or `Ctrl+C` to quit
 
-When adding a Claude profile, `agent-envs` writes `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN`. When adding a Codex profile, it writes `base_url`, `OPENAI_API_KEY`, `wire_api = "responses"`, and `requires_openai_auth = true`.
+When adding or editing a Claude profile, `agent-envs` writes `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN`. When adding or editing a Codex profile, it writes `base_url`, `OPENAI_API_KEY`, `wire_api = "responses"`, and `requires_openai_auth = true`.
 
 ## What Changes on Switch
 
